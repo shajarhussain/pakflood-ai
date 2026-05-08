@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+*.local
+
+# Node
+node_modules/
+.next/
+out/
+.vercel/
+
+# ML artifacts
+ml/artifacts/*.pkl
+ml/artifacts/*.joblib
+ml/artifacts/*.json
+!ml/artifacts/.gitkeep
+ml/evaluation/metrics_report.json
+
+# Data (never commit large geospatial files)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Secrets / keys
+*.pem
+*.key
+gee-key.json
+service-account*.json
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+postgres_data/

@@ -1,0 +1,85 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-SD-SKR", "name": "Sukkur", "province": "Sindh" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[68.3,27.4],[69.3,27.5],[69.2,28.1],[68.4,28.0],[68.3,27.4]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-SD-JCB", "name": "Jacobabad", "province": "Sindh" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[68.0,28.0],[68.9,28.1],[68.7,28.9],[67.8,28.7],[68.0,28.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-SD-LRK", "name": "Larkana", "province": "Sindh" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[67.6,27.1],[68.3,27.2],[68.2,27.8],[67.5,27.7],[67.6,27.1]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-PB-MUL", "name": "Multan", "province": "Punjab" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[71.0,29.9],[72.1,30.0],[71.9,30.7],[71.1,30.6],[71.0,29.9]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-PB-RWP", "name": "Rawalpindi", "province": "Punjab" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.6,33.3],[73.6,33.4],[73.4,34.0],[72.5,33.9],[72.6,33.3]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-PB-LHR", "name": "Lahore", "province": "Punjab" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[74.0,31.2],[74.8,31.3],[74.6,31.9],[74.0,31.8],[74.0,31.2]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-KP-PSH", "name": "Peshawar", "province": "KPK" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[71.3,33.8],[72.1,33.9],[71.9,34.4],[71.2,34.3],[71.3,33.8]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-BL-QTA", "name": "Quetta", "province": "Balochistan" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[66.5,29.8],[67.6,30.0],[67.4,30.6],[66.4,30.5],[66.5,29.8]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-BL-NAS", "name": "Naseerabad", "province": "Balochistan" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[67.7,28.4],[68.7,28.5],[68.5,29.3],[67.6,29.2],[67.7,28.4]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "district_id": "PK-GB-GIL", "name": "Gilgit", "province": "Gilgit-Baltistan" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[73.5,35.4],[75.2,35.6],[74.9,36.6],[73.3,36.4],[73.5,35.4]]]
+      }
+    }
+  ]
+}

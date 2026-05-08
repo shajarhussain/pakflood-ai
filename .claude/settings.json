@@ -1,0 +1,23 @@
+{
+  "model": "claude-sonnet-4-6",
+  "projectName": "PakFlood AI",
+  "includeCoAuthoredBy": true,
+  "permissions": {
+    "allow": [
+      "Bash(pytest*)",
+      "Bash(npm test*)",
+      "Bash(npm run*)",
+      "Bash(uvicorn*)",
+      "Bash(python*)",
+      "Bash(pip install*)",
+      "Bash(alembic*)",
+      "Bash(npx playwright*)",
+      "Bash(bandit*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)"
+    ]
+  }
+}

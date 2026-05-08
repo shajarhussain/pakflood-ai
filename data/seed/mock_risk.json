@@ -1,0 +1,12 @@
+[
+  {"district_id": "PK-SD-SKR", "name": "Sukkur",      "province": "Sindh",       "risk_score": 0.82, "risk_level": "High",     "confidence": 0.74, "top_factors": ["7-day rainfall anomaly", "near Indus floodplain", "historical flood frequency"]},
+  {"district_id": "PK-SD-JCB", "name": "Jacobabad",   "province": "Sindh",       "risk_score": 0.91, "risk_level": "Severe",   "confidence": 0.81, "top_factors": ["extreme monsoon rainfall", "flat terrain", "2022 flood history"]},
+  {"district_id": "PK-SD-LRK", "name": "Larkana",     "province": "Sindh",       "risk_score": 0.76, "risk_level": "Severe",   "confidence": 0.70, "top_factors": ["river proximity", "drainage capacity", "antecedent wetness"]},
+  {"district_id": "PK-PB-MUL", "name": "Multan",      "province": "Punjab",      "risk_score": 0.55, "risk_level": "High",     "confidence": 0.65, "top_factors": ["Chenab river proximity", "historical events", "rainfall 7d"]},
+  {"district_id": "PK-PB-RWP", "name": "Rawalpindi",  "province": "Punjab",      "risk_score": 0.28, "risk_level": "Low",      "confidence": 0.60, "top_factors": ["low rainfall", "elevated terrain", "drainage infrastructure"]},
+  {"district_id": "PK-PB-LHR", "name": "Lahore",      "province": "Punjab",      "risk_score": 0.38, "risk_level": "Moderate", "confidence": 0.62, "top_factors": ["urban drainage", "moderate rainfall", "river proximity"]},
+  {"district_id": "PK-KP-PSH", "name": "Peshawar",    "province": "KPK",         "risk_score": 0.42, "risk_level": "Moderate", "confidence": 0.58, "top_factors": ["Kabul river", "monsoon tail", "historical events"]},
+  {"district_id": "PK-BL-QTA", "name": "Quetta",      "province": "Balochistan", "risk_score": 0.35, "risk_level": "Moderate", "confidence": 0.55, "top_factors": ["flash flood risk", "arid terrain runoff", "infrastructure"]},
+  {"district_id": "PK-BL-NAS", "name": "Naseerabad",  "province": "Balochistan", "risk_score": 0.88, "risk_level": "Severe",   "confidence": 0.78, "top_factors": ["2022 flood history", "low elevation", "Indus floodplain"]},
+  {"district_id": "PK-GB-GIL", "name": "Gilgit",      "province": "GB",          "risk_score": 0.22, "risk_level": "Low",      "confidence": 0.52, "top_factors": ["glacial melt risk", "elevated terrain", "seasonal snow"]}
+]

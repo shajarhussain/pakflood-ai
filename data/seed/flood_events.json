@@ -1,0 +1,43 @@
+[
+  {
+    "id": "evt-2010-super-floods",
+    "year": 2010,
+    "title": "2010 Pakistan Super Floods",
+    "affected_provinces": ["KPK", "Punjab", "Sindh", "Balochistan"],
+    "affected_districts": ["Nowshera", "Charsadda", "Sukkur", "Larkana", "Jacobabad", "Naseerabad"],
+    "peak_month": "August",
+    "estimated_affected": 20000000,
+    "description": "The 2010 Pakistan floods were one of the worst in the country's history. Triggered by abnormally heavy monsoon rains, approximately one-fifth of Pakistan's total land area was underwater at the peak."
+  },
+  {
+    "id": "evt-2011-sindh-floods",
+    "year": 2011,
+    "title": "2011 Sindh Floods",
+    "affected_provinces": ["Sindh", "Balochistan"],
+    "affected_districts": ["Thatta", "Badin", "Jacobabad", "Larkana", "Dadu"],
+    "peak_month": "September",
+    "estimated_affected": 9000000,
+    "description": "Heavy monsoon rains caused severe flooding in southern Pakistan, particularly Sindh. Millions were displaced and large areas of agricultural land were damaged."
+  },
+  {
+    "id": "evt-2014-azad-kashmir-punjab",
+    "year": 2014,
+    "title": "2014 Pakistan Floods",
+    "affected_provinces": ["Punjab", "Azad Kashmir"],
+    "affected_districts": ["Multan", "Muzaffargarh", "Jhang", "Sialkot"],
+    "peak_month": "September",
+    "estimated_affected": 2500000,
+    "description": "Heavy monsoon rains caused flooding in central Punjab and Azad Kashmir, with the Chenab and Ravi rivers overflowing their banks."
+  },
+  {
+    "id": "evt-2022-record-floods",
+    "year": 2022,
+    "title": "2022 Pakistan Catastrophic Floods",
+    "affected_provinces": ["Sindh", "Balochistan", "KPK", "Punjab"],
+    "affected_districts": ["Jacobabad", "Sukkur", "Larkana", "Naseerabad", "Jaffarabad", "Dadu", "Thatta"],
+    "peak_month": "August",
+    "estimated_affected": 33000000,
+    "damage_usd_billion": 14.9,
+    "description": "The 2022 floods were unprecedented in scale. Extreme monsoon rainfall — linked to climate change — caused flooding across one-third of Pakistan. Sindh and Balochistan were worst affected. Damages exceeded USD 14.9 billion (World Bank PDNA)."
+  }
+]
