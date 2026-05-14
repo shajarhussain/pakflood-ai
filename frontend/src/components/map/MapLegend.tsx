@@ -2,6 +2,8 @@
 
 import { RISK_COLORS, RISK_ICONS } from "@/lib/risk-colors";
 import type { RiskLevel } from "@/lib/types";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 const DISTRICT_LEVELS: { level: RiskLevel; label: string; range: string }[] = [
   { level: "Severe",   label: "Severe",   range: ">75%" },
@@ -24,6 +26,9 @@ interface Props {
 }
 
 export function MapLegend({ showGrid = false, panelOpen = false }: Props) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const footer = v3Ready ? "v3 flood probability (calibrated)" : MODEL_UNAVAILABLE_MESSAGE;
   return (
     <div
       aria-label="Flood risk level legend"
@@ -119,9 +124,9 @@ export function MapLegend({ showGrid = false, panelOpen = false }: Props) {
 
       <div
         className="mt-2.5 pt-2 text-[9px]"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#4B6280" }}
+        style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: v3Ready ? "#4B6280" : "#FCA5A5" }}
       >
-        Baseline educational model
+        {footer}
       </div>
     </div>
   );

@@ -3,6 +3,8 @@
 import type { MockRiskEntry } from "@/data/mock";
 import type { RiskExplanation } from "@/lib/types";
 import { RISK_COLORS } from "@/lib/risk-colors";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 interface Props {
   district: MockRiskEntry;
@@ -39,6 +41,12 @@ const MOCK_FACTORS = [
 ];
 
 export function RiskBrief({ district, explanation }: Props) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const trained = modelStatus?.last_trained_iso?.slice(0, 10) ?? "";
+  const modelLabel = v3Ready
+    ? `Model: Real prediction v3 · BalancedRF + ${modelStatus?.calibration_method ?? "sigmoid"}${trained ? ` (last trained ${trained})` : ""}`
+    : `Model: ${MODEL_UNAVAILABLE_MESSAGE}`;
   const color  = RISK_COLORS[explanation.risk_level] ?? "#94A3B8";
   const glow   = RISK_GLOW[explanation.risk_level]   ?? "transparent";
   const bg     = RISK_BG[explanation.risk_level]     ?? "transparent";
@@ -91,8 +99,8 @@ export function RiskBrief({ district, explanation }: Props) {
           </div>
         </div>
 
-        <p className="text-[10px] mt-2" style={{ color: "#4B6280" }}>
-          Model: RandomForest baseline-v1.0
+        <p className="text-[10px] mt-2" style={{ color: v3Ready ? "#4B6280" : "#FCA5A5" }}>
+          {modelLabel}
         </p>
       </div>
 

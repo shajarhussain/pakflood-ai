@@ -1,6 +1,8 @@
 "use client";
 
 import type { LayerVisibility } from "@/components/map/MapDashboard";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 const SOURCES = [
   { id: "IMERG",     dot: "#F59E0B", label: "stale 4h",  pulse: false },
@@ -23,6 +25,13 @@ interface Props {
 }
 
 export function StatusBar({ activeLayers }: Props) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const modelLabel = v3Ready
+    ? `Real prediction v3${modelStatus?.prediction_window ? ` · ${modelStatus.prediction_window}` : ""}`
+    : MODEL_UNAVAILABLE_MESSAGE;
+  const modelLabelColor = v3Ready ? "#94A3B8" : "#FCA5A5";
+
   const activeLayerBadges = activeLayers
     ? (Object.entries(LAYER_LABELS) as [keyof LayerVisibility, { label: string; color: string }][])
         .filter(([key]) => activeLayers[key])
@@ -83,8 +92,10 @@ export function StatusBar({ activeLayers }: Props) {
         <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#4B6280" }}>
           Model
         </span>
-        <span className="text-[10px]" style={{ color: "#94A3B8" }}>RF baseline-v1.0</span>
-        <span className="text-[10px]" style={{ color: "#4B6280" }}>AUC 0.71 · 10 districts</span>
+        <span className="text-[10px]" style={{ color: modelLabelColor }}>{modelLabel}</span>
+        {v3Ready && modelStatus?.calibration_method && (
+          <span className="text-[10px]" style={{ color: "#4B6280" }}>{`calibrated · ${modelStatus.calibration_method}`}</span>
+        )}
       </div>
     </div>
   );

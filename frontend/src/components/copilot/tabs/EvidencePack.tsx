@@ -58,7 +58,7 @@ const SOURCES: SourceCard[] = [
       "Baseline: 30-year avg",
       "Period:   Seasonal",
     ],
-    note: "Baseline educational model · Used for anomaly calculation",
+    note: "30-year climatology · used for anomaly calculation",
   },
   {
     id: "reliefweb",

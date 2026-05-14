@@ -17,6 +17,52 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v
 // Response types (mirror backend Pydantic schemas)
 // ---------------------------------------------------------------------------
 
+/**
+ * Status of the v3 real-prediction model artifact.
+ *
+ * The UI must use this to decide whether to show "Real prediction v3"
+ * or the honest "Real prediction model unavailable" message. The mock
+ * `model_version` returned by the risk endpoints is NOT renamed — only
+ * an honest /api/v1/model/status response with both flags true unlocks
+ * the v3 chrome.
+ */
+export interface ModelStatus {
+  mode: string;
+  artifact_exists: boolean;
+  artifact_path: string;
+  metadata_exists: boolean;
+  metadata_path: string;
+  is_prediction_model: boolean;
+  model_name: string | null;
+  model_type: string | null;
+  prediction_window: string | null;
+  calibration_method: string | null;
+  calibration_api: string | null;
+  last_trained_iso: string | null;
+  data_sources: Record<string, string> | null;
+  metric_crs: string | null;
+  remediation: string | null;
+}
+
+export const MODEL_UNAVAILABLE_MESSAGE =
+  "Real prediction model unavailable — run the real-data pipeline first.";
+
+/** Returns the live model status; null if the backend is unreachable. */
+export async function fetchModelStatus(): Promise<ModelStatus | null> {
+  try {
+    const res = await fetch(`${API_BASE}/model/status`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as ModelStatus;
+  } catch {
+    return null;
+  }
+}
+
+/** True only when /api/v1/model/status confirms both flags. */
+export function isV3Available(status: ModelStatus | null | undefined): boolean {
+  return !!status && status.artifact_exists === true && status.is_prediction_model === true;
+}
+
 export interface ApiRiskResponse {
   district_id: string;
   name: string;

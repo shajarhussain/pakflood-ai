@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { MockRiskEntry } from "@/data/mock";
 import type { RiskExplanation } from "@/lib/types";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 interface Props {
   district: MockRiskEntry;
@@ -62,6 +64,11 @@ const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export function CopilotChat({ district, explanation }: Props) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const chatFooter = v3Ready
+    ? `Real prediction v3 · ${modelStatus?.calibration_method ?? "sigmoid"}-calibrated`
+    : MODEL_UNAVAILABLE_MESSAGE;
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [response, setResponse] = useState<string | null>(null);
 
@@ -102,8 +109,8 @@ export function CopilotChat({ district, explanation }: Props) {
             <p className="text-xs leading-relaxed" style={{ color: "#CBD5E1" }}>
               {district.name} has a <strong style={{ color: "#F1F5F9" }}>{explanation.risk_level.toLowerCase()} flood risk</strong> — score {(district.risk_score * 100).toFixed(0)}% with {(explanation.confidence * 100).toFixed(0)}% confidence. The primary driver is <em>{district.top_factors[0] ?? "extreme conditions"}</em>. Select an action below to explore further.
             </p>
-            <p className="text-[10px] mt-1.5" style={{ color: "#4B6280" }}>
-              Educational prototype · Rule-based responses · baseline-v1.0
+            <p className="text-[10px] mt-1.5" style={{ color: v3Ready ? "#4B6280" : "#FCA5A5" }}>
+              {chatFooter}
             </p>
           </div>
         </div>

@@ -26,5 +26,14 @@ class Settings(BaseSettings):
     NASA_EARTHDATA_USERNAME: str = ""
     NASA_EARTHDATA_PASSWORD: str = ""
 
+    # PakFlood AI v3 — Real Prediction Pipeline
+    # MODEL_MODE="real_prediction" is the ONLY supported mode in v3. There is
+    # no synthetic / baseline fallback. If the calibrated artifact is missing,
+    # /api/v1/model/status reports artifact_exists=false and the frontend shows
+    # "Real prediction model unavailable — run the real-data pipeline first."
+    MODEL_MODE: str = "real_prediction"
+    PREDICTION_MODEL_PATH: str = "ml/artifacts/flood_prediction_calibrated_v3.pkl"
+    PREDICTION_METADATA_PATH: str = "ml/artifacts/flood_prediction_metadata_v3.json"
+
 
 settings = Settings()
