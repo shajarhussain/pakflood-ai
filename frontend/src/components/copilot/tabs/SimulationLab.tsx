@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import type { MockRiskEntry } from "@/data/mock";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 interface Props {
   district: MockRiskEntry;
@@ -42,6 +44,11 @@ function riskLabel(score: number) {
 }
 
 export function SimulationLab({ district }: Props) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const simFooter = v3Ready
+    ? "Simulation uses v3 prediction model · BalancedRF + sigmoid calibration"
+    : `${MODEL_UNAVAILABLE_MESSAGE} — simulation disabled until pipeline is run`;
   const [rainfall,    setRainfall]    = useState(0);
   const [dischargeIdx, setDischarge]  = useState(0);
   const [allStale,    setAllStale]    = useState(false);
@@ -232,8 +239,8 @@ export function SimulationLab({ district }: Props) {
           </div>
         </div>
 
-        <p className="text-[10px] mt-2 text-center" style={{ color: "#4B6280" }}>
-          Prototype simulation · baseline RF model weights · Not a calibrated hydrological model
+        <p className="text-[10px] mt-2 text-center" style={{ color: v3Ready ? "#4B6280" : "#FCA5A5" }}>
+          {simFooter}
         </p>
       </Section>
 

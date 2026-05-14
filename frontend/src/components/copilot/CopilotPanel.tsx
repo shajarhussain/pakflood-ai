@@ -7,6 +7,8 @@ import type { RiskExplanation } from "@/lib/types";
 import type { GridCell } from "@/lib/grid-risk";
 import type { CityWeather } from "@/data/pakistan-cities-weather";
 import { getGridCellColor } from "@/lib/grid-risk";
+import { useModelStatus } from "@/lib/useModelStatus";
+import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
 
 const RiskBrief              = dynamic(() => import("./tabs/RiskBrief").then((m) => m.RiskBrief),                       { ssr: false });
 const CopilotChat            = dynamic(() => import("./tabs/CopilotChat").then((m) => m.CopilotChat),                   { ssr: false });
@@ -259,6 +261,11 @@ export function CopilotPanel({ district, explanation, selectedGridCell, selected
 }
 
 function GridCellAnalysis({ cell }: { cell: GridCell }) {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
+  const cellFooter = v3Ready
+    ? "Click a district for v3 prediction model analysis"
+    : `Click a district · ${MODEL_UNAVAILABLE_MESSAGE}`;
   const color = getGridCellColor(cell.risk_level);
   const pct   = Math.round(cell.score * 100);
   const rainfallColor = cell.rainfall_mm >= 50 ? "#EF4444" : cell.rainfall_mm >= 25 ? "#F97316" : "#00FFD1";
@@ -341,9 +348,9 @@ function GridCellAnalysis({ cell }: { cell: GridCell }) {
 
       <div
         className="rounded-lg px-3 py-2 text-[10px] text-center"
-        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", color: "#4B6280" }}
+        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", color: v3Ready ? "#4B6280" : "#FCA5A5" }}
       >
-        Click a district for detailed AI analysis · Data: demo heuristic model
+        {cellFooter}
       </div>
     </div>
   );
