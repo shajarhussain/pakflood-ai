@@ -29,6 +29,38 @@ export function MapLegend({ showGrid = false, panelOpen = false }: Props) {
   const modelStatus = useModelStatus();
   const v3Ready = isV3Available(modelStatus);
   const footer = v3Ready ? "v3 flood probability (calibrated)" : MODEL_UNAVAILABLE_MESSAGE;
+
+  // v3 strict: do not show a calibrated-color legend that implies v3 output.
+  if (!v3Ready) {
+    return (
+      <div
+        aria-label="Flood risk level legend"
+        data-testid="map-legend-unavailable"
+        style={{
+          position: "absolute",
+          bottom: 88,
+          right: panelOpen ? 316 : 16,
+          zIndex: 400,
+          background: "rgba(13,21,38,0.92)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(252,165,165,0.30)",
+          borderRadius: 10,
+          padding: "9px 12px",
+          maxWidth: 240,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          transition: "right 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
+        <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: "#FCA5A5" }}>
+          v3 Prediction Unavailable
+        </p>
+        <p className="text-[10px]" style={{ color: "#94A3B8" }}>
+          Risk layer disabled — run the real-data pipeline first.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       aria-label="Flood risk level legend"
