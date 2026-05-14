@@ -1,0 +1,7 @@
+lahore_v3_proof
+model_status.artifact_exists=false
+model_status.is_prediction_model=false
+risk-brief-unavailable testid visible: YES
+38% present: NO
+HIGH pill present: NO
+Real prediction model unavailable text present: YES
