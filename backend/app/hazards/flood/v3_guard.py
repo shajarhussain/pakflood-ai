@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -28,7 +27,23 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+def _resolve_project_root() -> Path:
+    """Find the project root that contains ``ml/``.
+
+    Host layout: ``pakflood-ai/backend/app/hazards/flood/v3_guard.py`` →
+    ``pakflood-ai/`` (parents[4]).
+    Container layout: ``/app/app/hazards/flood/v3_guard.py`` with the host's
+    ``ml/`` bind-mounted at ``/app/ml`` → ``/app`` (parents[3]).
+    The ``ml/`` directory is the universal anchor in both layouts.
+    """
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        if (ancestor / "ml").is_dir():
+            return ancestor
+    return Path.cwd()
+
+
+_PROJECT_ROOT = _resolve_project_root()
 
 
 NEXT_STEPS = [
@@ -67,9 +82,14 @@ class V3ArtifactState:
 
 
 def v3_artifact_state() -> V3ArtifactState:
-    """Read the v3 artifact/metadata state from disk. Never raises."""
-    artifact_path = _PROJECT_ROOT / settings.PREDICTION_MODEL_PATH
-    metadata_path = _PROJECT_ROOT / settings.PREDICTION_METADATA_PATH
+    """Read the active model's artifact/metadata state from disk. Never raises.
+
+    Honours ``settings.active_model_paths()`` so the same function works for
+    both strict ``real_prediction`` and Gate B-Lite ``real_lite_prediction``.
+    """
+    artifact_rel, metadata_rel = settings.active_model_paths()
+    artifact_path = _PROJECT_ROOT / artifact_rel
+    metadata_path = _PROJECT_ROOT / metadata_rel
 
     artifact_exists = artifact_path.exists() and artifact_path.is_file()
     metadata_exists = metadata_path.exists() and metadata_path.is_file()
@@ -87,24 +107,52 @@ def v3_artifact_state() -> V3ArtifactState:
         artifact_exists=artifact_exists,
         metadata_exists=metadata_exists,
         is_prediction_model=is_prediction_model,
-        artifact_path=settings.PREDICTION_MODEL_PATH,
-        metadata_path=settings.PREDICTION_METADATA_PATH,
+        artifact_path=artifact_rel,
+        metadata_path=metadata_rel,
         metadata=metadata,
     )
 
 
 def ensure_v3_ready() -> V3ArtifactState:
-    """Raise ``ModelArtifactMissingError`` unless v3 is fully ready.
+    """Raise ``ModelArtifactMissingError`` unless the active model is fully ready.
 
-    Behaviour is gated on ``settings.MODEL_MODE``. When the mode is anything
-    other than ``"real_prediction"`` this function is a no-op (returns the
-    state for inspection but never raises) — that escape hatch exists only
-    for legacy tests that pin a different mode via the env var; the deployed
-    config always pins ``real_prediction``.
+    Both ``real_prediction`` (strict v3) and ``real_lite_prediction`` (Gate
+    B-Lite weak-label prototype) flow through the same guard. In
+    ``real_lite_prediction`` mode the artifact existing is enough to mark
+    ``/model/status`` as available — but the risk endpoints still raise
+    here because no live NASA-POWER-driven feature provider is wired yet,
+    and we will not serve legacy mock scores as if they were v3 output.
+
+    The escape hatch ``MODEL_MODE != real_prediction|real_lite_prediction``
+    exists only for legacy tests that pin a different mode via env var.
     """
     state = v3_artifact_state()
-    if settings.MODEL_MODE != "real_prediction":
+    if settings.MODEL_MODE not in ("real_prediction", "real_lite_prediction"):
         return state
+
+    # Gate B-Lite: even when artifact exists, the risk endpoints have no
+    # live feature provider yet. Block them with a distinct message so the
+    # frontend never displays a legacy rule-based score as v3-lite output.
+    if settings.MODEL_MODE == "real_lite_prediction":
+        if not state.artifact_exists:
+            raise ModelArtifactMissingError(
+                reason=(
+                    "Real-lite prediction model unavailable — run "
+                    "ml/training/train_real_lite_model.py first."
+                ),
+                required_artifact=state.artifact_path,
+                metadata_path=state.metadata_path,
+            )
+        raise ModelArtifactMissingError(
+            reason=(
+                "Real-lite prediction inference is not wired yet for the risk "
+                "endpoints. /api/v1/model/status reports the trained artifact, "
+                "but live per-request feature fetching from NASA POWER has not "
+                "been implemented. No legacy rule-based score is served."
+            ),
+            required_artifact=state.artifact_path,
+            metadata_path=state.metadata_path,
+        )
 
     if not state.artifact_exists:
         raise ModelArtifactMissingError(

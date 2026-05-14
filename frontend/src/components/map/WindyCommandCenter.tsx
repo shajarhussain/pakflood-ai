@@ -10,7 +10,7 @@ import { FloodTimeline } from "@/components/timeline/FloodTimeline";
 import { MOCK_FLOOD_EVENTS, RISK_BY_ID, buildMockExplanation } from "@/data/mock";
 import type { MockRiskEntry, MockFloodEvent } from "@/data/mock";
 import type { RiskExplanation } from "@/lib/types";
-import { fetchExplanation, fetchFloodEvents, searchLocations, isV3Available, type ApiLocationResult } from "@/lib/api";
+import { fetchExplanation, fetchFloodEvents, searchLocations, isV3Available, isLitePrediction, type ApiLocationResult } from "@/lib/api";
 import { useModelStatus } from "@/lib/useModelStatus";
 import { RISK_COLORS, RISK_ICONS } from "@/lib/risk-colors";
 import type { RiskLevel } from "@/lib/types";
@@ -64,6 +64,7 @@ const mono: React.CSSProperties = { fontFamily: "var(--font-geist-mono, monospac
 export default function WindyCommandCenter() {
   const modelStatus = useModelStatus();
   const v3Ready = isV3Available(modelStatus);
+  const lite    = isLitePrediction(modelStatus);
   // ── Layer / selection state ──────────────────────────────────────────────
   const [mode, setMode]                     = useState<LayerMode>("risk");
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
@@ -257,6 +258,8 @@ export default function WindyCommandCenter() {
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginLeft: "auto", marginRight: "auto" }}>
           <Pill color="#00C8AA" label="SYS:OK" />
           <Pill color="#00C8AA" label="DATA:FRESH" />
+          {v3Ready && lite && <Pill color="#FCD34D" label="V3-LITE · WEAK-LABEL PROTOTYPE" />}
+          {v3Ready && !lite && <Pill color="#00FFD1" label="V3 · CALIBRATED" />}
           {severeCount > 0 && <Pill color="#FF0040" label={`SEVERE:${severeCount} ▲`} pulse />}
           {highCount   > 0 && <Pill color="#FF7700" label={`HIGH:${highCount}`} />}
         </div>

@@ -2,7 +2,7 @@
 
 import type { LayerVisibility } from "@/components/map/MapDashboard";
 import { useModelStatus } from "@/lib/useModelStatus";
-import { isV3Available, MODEL_UNAVAILABLE_MESSAGE } from "@/lib/api";
+import { isV3Available, isLitePrediction, modelBadgeLabel } from "@/lib/api";
 
 const SOURCES = [
   { id: "IMERG",     dot: "#F59E0B", label: "stale 4h",  pulse: false },
@@ -27,10 +27,9 @@ interface Props {
 export function StatusBar({ activeLayers }: Props) {
   const modelStatus = useModelStatus();
   const v3Ready = isV3Available(modelStatus);
-  const modelLabel = v3Ready
-    ? `Real prediction v3${modelStatus?.prediction_window ? ` · ${modelStatus.prediction_window}` : ""}`
-    : MODEL_UNAVAILABLE_MESSAGE;
-  const modelLabelColor = v3Ready ? "#94A3B8" : "#FCA5A5";
+  const lite    = isLitePrediction(modelStatus);
+  const modelLabel = modelBadgeLabel(modelStatus);
+  const modelLabelColor = v3Ready ? (lite ? "#FCD34D" : "#94A3B8") : "#FCA5A5";
 
   const activeLayerBadges = activeLayers
     ? (Object.entries(LAYER_LABELS) as [keyof LayerVisibility, { label: string; color: string }][])
@@ -93,6 +92,18 @@ export function StatusBar({ activeLayers }: Props) {
           Model
         </span>
         <span className="text-[10px]" style={{ color: modelLabelColor }}>{modelLabel}</span>
+        {lite && (
+          <span
+            className="text-[10px] uppercase tracking-wider"
+            style={{
+              color: "#FCD34D", background: "rgba(252,211,77,0.08)",
+              border: "1px solid rgba(252,211,77,0.30)",
+              borderRadius: 4, padding: "1px 6px",
+            }}
+          >
+            Weak-label public-data prototype
+          </span>
+        )}
         {v3Ready && modelStatus?.calibration_method && (
           <span className="text-[10px]" style={{ color: "#4B6280" }}>{`calibrated · ${modelStatus.calibration_method}`}</span>
         )}
