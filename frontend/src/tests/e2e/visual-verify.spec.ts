@@ -296,11 +296,27 @@ test("08 — SAR evidence panel", async ({ page }) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 9. Simulation lab — sliders + projected risk after district select
+// 9. Simulation Lab — v3 contract
+//   - When /api/v1/model/status reports artifact_exists=false (the live state
+//     until the user completes Gate B), the Simulation Lab MUST be disabled.
+//     No legacy sliders / no fake baseline / no fake projected risk may be
+//     rendered as if it were v3 prediction output.
+//   - When /api/v1/model/status is mocked as artifact_exists=true, the full
+//     simulation surface is allowed. That path is only exercised under the
+//     mock and serves as a forward-compatibility check for Gate B.
 // ─────────────────────────────────────────────────────────────────────────────
-test("09 — simulation lab shows sliders and projected risk", async ({ page }) => {
+test("09 — simulation lab is disabled when v3 artifact is missing", async ({ page }) => {
   await page.goto("/");
   await waitForMap(page);
+
+  // Confirm the running stack is in the unavailable state.
+  const status = await page.evaluate(async () => {
+    const r = await fetch("http://localhost:8000/api/v1/model/status");
+    return r.json();
+  });
+  expect(status.mode).toBe("real_prediction");
+  expect(status.artifact_exists).toBe(false);
+  expect(status.is_prediction_model).toBe(false);
 
   const selected = await selectAnyDistrict(page);
   expect(selected, "At least one MVP district must be selectable").toBeTruthy();
@@ -310,23 +326,77 @@ test("09 — simulation lab shows sliders and projected risk", async ({ page }) 
   await simBtn.click();
   await page.waitForTimeout(800);
 
-  const panel = page.locator('[aria-label="Risk explanation panel"]');
-  const presetBtn = panel.locator('button', { hasText: "+50% Rainfall" });
-  if (await presetBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await presetBtn.click();
-    await page.waitForTimeout(400);
-  }
+  // Honest unavailable card must be present.
+  await expect(page.getByTestId("simulation-lab-unavailable")).toBeVisible({ timeout: 6_000 });
 
+  const panel = page.locator('[aria-label="Risk explanation panel"]');
   const panelHtml = await panel.innerHTML();
+
+  // Disabled message must be shown (SimulationLab unavailable card).
+  expect(panelHtml).toMatch(/Simulation disabled until real prediction artifact is available/i);
+  expect(panelHtml).toMatch(/Simulation Lab · Disabled/i);
+  expect(panelHtml).toMatch(/Run the v3 real-data pipeline first/i);
+
+  // No legacy "what-if" interactive controls.
+  expect(panel.locator('button', { hasText: "+50% Rainfall" })).toHaveCount(0);
+  expect(panel.locator('button', { hasText: "+25% Rainfall" })).toHaveCount(0);
+  expect(panel.locator('button', { hasText: /Reset to baseline/i })).toHaveCount(0);
+
+  // No fake projected / baseline / discharge-slider output.
+  expect(panelHtml).not.toMatch(/Projected Impact/i);
+  expect(panelHtml).not.toMatch(/Baseline (?:risk|score|model)/i);
+  expect(panelHtml).not.toMatch(/Rainfall intensity\s*<\/span>/i);
+  expect(panelHtml).not.toMatch(/Prototype simulation/i);
+
+  await noFakeStrings(page);
+  const file = await shot(page, "09-simulation-lab-disabled");
+  console.log("SCREENSHOT:", file, "| v3 artifact_exists:", status.artifact_exists);
+});
+
+
+test("09b — simulation lab full surface when v3 status is mocked as available", async ({ page }) => {
+  // Forward-compatibility check for Gate B. Mock /api/v1/model/status to
+  // report artifact_exists=true so the v3-ready code path renders the
+  // simulation lab in its full form. No real model is invoked.
+  await page.route("**/api/v1/model/status", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mode: "real_prediction",
+        artifact_exists: true,
+        artifact_path: "ml/artifacts/flood_prediction_calibrated_v3.pkl",
+        metadata_exists: true,
+        metadata_path: "ml/artifacts/flood_prediction_metadata_v3.json",
+        is_prediction_model: true,
+        model_name: "flood_prediction_v3",
+        model_type: "BalancedRandomForestClassifier + sigmoid CalibratedClassifierCV",
+        prediction_window: "T+1 to T+3 days",
+        calibration_method: "sigmoid",
+        calibration_api: "FrozenEstimator",
+        last_trained_iso: "2026-05-13T12:00:00Z",
+        data_sources: null,
+        metric_crs: "EPSG:6933",
+        remediation: null,
+      }),
+    })
+  );
+
+  await page.goto("/");
+  await waitForMap(page);
+  const selected = await selectAnyDistrict(page);
+  expect(selected, "At least one MVP district must be selectable").toBeTruthy();
+
+  const simBtn = page.locator('[aria-label="Risk explanation panel"] button', { hasText: "Sim" });
+  await expect(simBtn).toBeEnabled({ timeout: 6_000 });
+  await simBtn.click();
+  await page.waitForTimeout(800);
+
+  const panel = page.locator('[aria-label="Risk explanation panel"]');
+  const panelHtml = await panel.innerHTML();
+
   expect(panelHtml).toMatch(/What-If Simulation|Simulation Lab/i);
   expect(panelHtml).toMatch(/Rainfall intensity|rainfall/i);
   expect(panelHtml).toMatch(/River discharge|discharge/i);
-  expect(panelHtml).toMatch(/Projected Impact|Projected/i);
-  expect(panelHtml).toMatch(/Baseline|baseline/i);
-  expect(panelHtml).toMatch(/confidence|conf/i);
-  expect(panelHtml).toMatch(/Prototype simulation|not an official/i);
-
-  await noFakeStrings(page);
-  const file = await shot(page, "09-simulation-lab");
-  console.log("SCREENSHOT:", file);
+  expect(panelHtml).not.toMatch(/Simulation disabled until real prediction artifact/i);
 });
