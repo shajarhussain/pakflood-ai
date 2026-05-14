@@ -192,6 +192,52 @@ flips to `{"artifact_exists": true, "is_prediction_model": true, ...}` and the
 frontend swaps every "Real prediction model unavailable" string for the
 "Real prediction v3" badge — without any code change.
 
+## After downloading datasets: validation commands
+
+Once any (or all) of the 8 datasets have been placed at their target paths,
+run these two read-only commands inside the container. They do not train and
+do not generate any synthetic data — they only inspect what is on disk.
+
+```
+# 1. Contract check — passes the dependency layer, fails (with line-by-line
+#    remediation) on whatever is still missing.
+docker exec pakflood-ai-backend-1 \
+  python /app/ml/training/real_data_contract.py --check
+
+# 2. Per-dataset shape inspection — confirms each file's CRS, bounds, feature
+#    count or raster dimensions, date range parsed from filenames, and
+#    required CSV columns. Useful BEFORE the heavy pipeline runs because
+#    bad CRS / wrong column names / unparseable filenames are the most
+#    common sources of pipeline failures.
+docker exec pakflood-ai-backend-1 \
+  python /app/ml/training/check_raw_data_shapes.py
+```
+
+What `check_raw_data_shapes.py` looks for, per dataset:
+
+| Key | What it verifies |
+|---|---|
+| `boundaries` | CRS, total bounds, feature count, presence of the required `district_id` column |
+| `flood_extents` | CRS, feature count, lists property columns that look like an event-date field (`event_date`, `OBSERVED_AT`, `obs_date`, …) so you can pass the right `--date-property` to `build_flood_labels.py` |
+| `imerg_dir` | `*.tif` count, ISO date range parsed from filenames, list of files whose filenames lack a parseable date (those will be skipped by the zonal-stats step), sample CRS + grid shape |
+| `chirps_dir` | same as `imerg_dir` |
+| `glofas` | CSV exists and contains `district_id, date, river_discharge_m3s, source`; reports date range; flags missing required columns |
+| `elevation` | DEM CRS, bounds, width × height, pixel size, NoData |
+| `rivers` | CRS, feature count, bounds; sanity-flag `bounds_look_like_pakistan_clip` if the bounding box stays inside 60°–78°E × 22°–38°N (catches the common mistake of placing the unclipped global HydroRIVERS file here) |
+| `population` | accepts either the WorldPop raster OR the pre-aggregated district CSV; for the CSV variant it checks for `district_id, population_exposure_score, source` |
+
+The script exits non-zero on any MISS or schema problem, so it can also be
+used as a quick CI-style gate.
+
+Add `--json` for a machine-readable report.
+
+Notes:
+
+- The script does **not** train anything, does **not** touch
+  `ml/artifacts/`, and does **not** synthesise missing files.
+- It honours the v3 dependency contract — if `geopandas` / `rasterio` /
+  `pandas` are not installed, it exits with `DependencyMissingError`.
+
 ## Reminders
 
 - This document is for Gate B environment setup only. **No** training has been
