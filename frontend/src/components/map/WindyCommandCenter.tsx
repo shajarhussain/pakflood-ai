@@ -10,7 +10,8 @@ import { FloodTimeline } from "@/components/timeline/FloodTimeline";
 import { MOCK_FLOOD_EVENTS, RISK_BY_ID, buildMockExplanation } from "@/data/mock";
 import type { MockRiskEntry, MockFloodEvent } from "@/data/mock";
 import type { RiskExplanation } from "@/lib/types";
-import { fetchExplanation, fetchFloodEvents, searchLocations, type ApiLocationResult } from "@/lib/api";
+import { fetchExplanation, fetchFloodEvents, searchLocations, isV3Available, type ApiLocationResult } from "@/lib/api";
+import { useModelStatus } from "@/lib/useModelStatus";
 import { RISK_COLORS, RISK_ICONS } from "@/lib/risk-colors";
 import type { RiskLevel } from "@/lib/types";
 import type { GridCell } from "@/lib/grid-risk";
@@ -61,6 +62,8 @@ const MVP_DISTRICTS = new Set([
 const mono: React.CSSProperties = { fontFamily: "var(--font-geist-mono, monospace)" };
 
 export default function WindyCommandCenter() {
+  const modelStatus = useModelStatus();
+  const v3Ready = isV3Available(modelStatus);
   // ── Layer / selection state ──────────────────────────────────────────────
   const [mode, setMode]                     = useState<LayerMode>("risk");
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
@@ -212,6 +215,7 @@ export default function WindyCommandCenter() {
           onCityClick={handleCityClick}
           selectedCityName={selectedCity?.name ?? null}
           panelOpen={showPanel}
+          v3Available={v3Ready}
         />
       </div>
 

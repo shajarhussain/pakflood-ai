@@ -70,6 +70,7 @@ interface Props {
   onCityClick?: (city: CityWeather) => void;
   selectedCityName?: string | null;
   panelOpen?: boolean;
+  v3Available?: boolean;
 }
 
 function featureStyle(
@@ -270,7 +271,7 @@ export default function WindyPakistanMap({
   mapRef, mode, riskData, selectedDistrictId, onDistrictClick,
   affectedDistrictNames, onGridCellClick: _onGridCellClick,
   selectedGridCellId: _selectedGridCellId,
-  onCityClick, selectedCityName, panelOpen = false,
+  onCityClick, selectedCityName, panelOpen = false, v3Available = true,
 }: Props) {
   const highestRisk: RiskLevel = (() => {
     const entries = Array.from(riskData.values());
@@ -307,13 +308,15 @@ export default function WindyPakistanMap({
         <MapController mapRef={mapRef} />
         <TileLayer url={TILE_URL} attribution={TILE_ATTR} opacity={tileOpacity} />
 
-        {/* Province base fills — covers all of Pakistan so no black void */}
-        <ProvinceBaseLayer />
+        {/* Province base fills — covers all of Pakistan so no black void. Hidden in v3-strict-unavailable mode. */}
+        {v3Available && <ProvinceBaseLayer />}
 
-        {/* Province ambient labels */}
+        {/* Province ambient labels — always visible (geographic context, not v3 model output) */}
         <ProvinceLabels />
 
-        {/* District boundaries — choropleth only, no grid squares */}
+        {/* District boundaries — kept clickable, but with invisible fill so the polygon
+            shape never leaks the mock risk_level. featureStyle() already returns
+            fully-transparent polygons by default. */}
         <GeoJSON
           key={geoJsonKey}
           data={DISTRICTS_GEOJSON}
@@ -327,13 +330,16 @@ export default function WindyPakistanMap({
           }}
         />
 
-        {/* District highlight markers — clean radar-style pings instead of polygon fills */}
-        <DistrictHighlightLayer
-          riskData={riskData}
-          selectedId={selectedDistrictId}
-          onClick={onDistrictClick}
-          affectedNames={affectedDistrictNames}
-        />
+        {/* District highlight markers — colored radar pings. Hidden when v3 is unavailable
+            so the map does not display mock risk_level as if it were v3 calibrated output. */}
+        {v3Available && (
+          <DistrictHighlightLayer
+            riskData={riskData}
+            selectedId={selectedDistrictId}
+            onClick={onDistrictClick}
+            affectedNames={affectedDistrictNames}
+          />
+        )}
 
         {/* Real station rainfall markers — visible only in rainfall mode */}
         <RainfallStationLayer visible={mode === "rainfall"} />

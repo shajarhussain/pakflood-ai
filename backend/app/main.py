@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
+from app.hazards.flood.v3_guard import install_v3_exception_handler
 
 app = FastAPI(
     title="PakFlood AI",
@@ -21,3 +22,6 @@ app.add_middleware(
 )
 
 app.include_router(v1_router, prefix="/api/v1")
+
+# v3 fail-loud: convert ModelArtifactMissingError to a structured HTTP 503.
+install_v3_exception_handler(app)

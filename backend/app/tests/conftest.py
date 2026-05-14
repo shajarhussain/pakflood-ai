@@ -1,13 +1,20 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.disaster_risk_service import get_disaster_risk_service
-from app.services.source_registry_service import get_source_registry
-from app.schemas.boundary import LocationSearchResult
-from app.schemas.risk import RiskResponse, DISCLAIMER
-from app.schemas.flood_event import FloodEventResponse
-from app.schemas.data_source import DataSourceResponse
+from app.core.config import settings as _settings
+# Legacy tests use a fully mocked DisasterRiskService and never touch the v3
+# artifact path. We disable strict v3 fail-loud mode for the legacy suite by
+# pinning MODEL_MODE to a non-real-prediction value BEFORE app/main is imported.
+# The dedicated v3-strict tests pin MODEL_MODE="real_prediction" explicitly.
+_settings.MODEL_MODE = "legacy_demo"
+
+from app.main import app  # noqa: E402 — must follow the MODEL_MODE override
+from app.services.disaster_risk_service import get_disaster_risk_service  # noqa: E402
+from app.services.source_registry_service import get_source_registry  # noqa: E402
+from app.schemas.boundary import LocationSearchResult  # noqa: E402
+from app.schemas.risk import RiskResponse, DISCLAIMER  # noqa: E402
+from app.schemas.flood_event import FloodEventResponse  # noqa: E402
+from app.schemas.data_source import DataSourceResponse  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +153,13 @@ def _mock_registry():
 
 
 @pytest.fixture(autouse=True)
-def override_dependencies():
+def override_dependencies(monkeypatch):
+    # Existing test suite asserts legacy 200 responses with mocked data.
+    # The v3 strict mode is enabled by default in production, so for the
+    # legacy tests we relax MODEL_MODE here. New v3 fail-loud tests in
+    # test_v3_fail_loud.py explicitly set MODEL_MODE="real_prediction".
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "MODEL_MODE", "legacy_demo")
     app.dependency_overrides[get_disaster_risk_service] = _mock_drs
     app.dependency_overrides[get_source_registry] = _mock_registry
     yield

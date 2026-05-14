@@ -1,10 +1,15 @@
 """
 FloodPredictionStrategy — implements the HazardModule Protocol.
 
-Loads the trained RandomForest artifact from ml/artifacts/flood_baseline_v1.pkl.
-Falls back to rule-based classification if the artifact is missing (e.g., before
-the first training run). All sklearn/joblib imports are lazy so the backend
-starts cleanly even without ML packages installed.
+v3 strict mode (the only deployed mode):
+  - When ``settings.MODEL_MODE == "real_prediction"``, every model-dependent
+    code path requires the calibrated v3 artifact on disk. The legacy
+    rule-based path and the old baseline_v1.pkl artifact are NOT executed.
+  - The guard lives in ``app.hazards.flood.v3_guard``; routes call
+    ``ensure_v3_ready()`` before reaching the strategy.
+
+The legacy rule-based path and baseline-v1 loader are preserved for the
+backward-compatibility tests that pin ``MODEL_MODE = "legacy_demo"``.
 """
 
 from __future__ import annotations
@@ -94,6 +99,43 @@ def _nearest_district(lat: float, lon: float) -> str:
     return best_id
 
 
+def v3_confidence_from_probability(probability: float) -> float:
+    """Confidence as distance from the 0.5 decision boundary.
+
+    Stage-1 spec: ``confidence = 2 * |p - 0.5|``. Uncertainty is ``1 - confidence``.
+
+    Examples:
+        p=0.5 → confidence 0.0
+        p=0.9 → confidence 0.8
+        p=0.1 → confidence 0.8
+        p=1.0 → confidence 1.0
+        p=0.0 → confidence 1.0
+    """
+    return 2.0 * abs(probability - 0.5)
+
+
+def v3_risk_level(probability: float) -> str:
+    """Map a calibrated probability to the v3 risk band."""
+    if probability < 0.30:
+        return "Low"
+    if probability < 0.55:
+        return "Moderate"
+    if probability < 0.75:
+        return "High"
+    return "Severe"
+
+
+# Columns that may appear in pakistan_flood_prediction_v3.csv but MUST NOT be
+# passed to the model as input features (labels / leakage / non-numeric).
+V3_LEAKAGE_COLUMNS: frozenset[str] = frozenset({
+    "observed_flood_today",
+    "flood_next_24h", "flood_next_72h", "flood_next_7d",
+    "label_source", "feature_source_summary",
+    "date", "district_name", "province", "metric_crs",
+    "source_raster", "source_type", "district_id", "day_of_year",
+})
+
+
 def _rule_based_score(features: dict[str, float]) -> float:
     """Simple deterministic score used when the model artifact is absent."""
     river_prox = max(0.0, 1.0 - features.get("distance_to_river_km", 10.0) / 30.0)
@@ -163,15 +205,86 @@ class FloodPredictionStrategy:
     ) -> RiskAssessment:
         """Run inference for a specific district.
 
-        features — pre-built complete feature dict (static + dynamic).
-        If None, falls back to get_stub_features() (all synthetic).
+        v3 contract: when ``settings.MODEL_MODE == "real_prediction"`` this
+        method MUST go through ``infer_v3()``. If the calibrated artifact is
+        missing it raises ``ModelArtifactMissingError`` — the API exception
+        handler converts that to HTTP 503. The legacy ``_rule_infer`` and
+        ``_ml_infer`` paths are not called in real_prediction mode.
         """
+        from app.core.config import settings  # local import to avoid cycles
+        if settings.MODEL_MODE == "real_prediction":
+            return self.infer_v3(district_id)
+
         bundle = self._get_bundle()
         effective_features = features if features is not None else get_stub_features(district_id)
-
         if bundle is not None:
             return self._ml_infer(district_id, effective_features, bundle)
         return self._rule_infer(district_id, effective_features)
+
+    def infer_v3(self, district_id: str) -> RiskAssessment:
+        """v3 inference path — calibrated ``predict_proba`` only, no fallback.
+
+        - Loads ``flood_prediction_calibrated_v3.pkl`` lazily and validates
+          metadata (``is_prediction_model=True``, ``feature_list``, etc.).
+        - Reads the latest feature row for the district from the v3
+          ``FeatureVectorProvider`` and rejects any leakage column.
+        - Returns ``risk_score = model.predict_proba(X)[0, 1]``.
+        - ``confidence = 2 * |p - 0.5|``; ``risk_level`` via v3 thresholds.
+        """
+        from app.hazards.flood.v3_guard import ensure_v3_ready, ModelArtifactMissingError
+        from app.hazards.flood.v3_features import latest_features_for, _FEATURE_CSV
+
+        state = ensure_v3_ready()  # raises ModelArtifactMissingError if not ready
+        bundle = self._get_v3_bundle(state)
+
+        if not _FEATURE_CSV.exists():
+            raise ModelArtifactMissingError(
+                reason=(
+                    "Real feature vector unavailable — run "
+                    "build_prediction_dataset.py to produce "
+                    "data/real/training/pakistan_flood_prediction_v3.csv."
+                ),
+                required_artifact=str(_FEATURE_CSV),
+                metadata_path=state.metadata_path,
+            )
+
+        feature_list: list[str] = bundle["metadata"]["feature_list"]
+        features = latest_features_for(district_id, feature_list)
+
+        # Defensive leakage guard — even though latest_features_for() strips
+        # them, refuse to proceed if any leakage column slipped through.
+        leaked = [c for c in features if c in V3_LEAKAGE_COLUMNS]
+        if leaked:
+            raise ValueError(f"Leakage columns reached the model input: {leaked}")
+
+        import numpy as np
+        X = np.array([[features[c] for c in feature_list]], dtype=np.float64)
+        probability = float(bundle["model"].predict_proba(X)[0, 1])
+
+        return RiskAssessment(
+            risk_score=round(probability, 4),
+            risk_level=v3_risk_level(probability),
+            confidence=round(v3_confidence_from_probability(probability), 4),
+            top_factors=bundle["metadata"].get("feature_list", [])[:3],
+            model_version=bundle["metadata"].get("model_name", "flood_prediction_v3"),
+            source_status={s.source_id: "real_prediction" for s in self.get_required_sources()},
+        )
+
+    def _get_v3_bundle(self, state) -> dict:
+        """Lazy-load the calibrated v3 artifact + cached metadata."""
+        if not hasattr(self, "_v3_bundle"):
+            import joblib
+            from pathlib import Path
+            artifact = joblib.load(Path(__file__).resolve().parents[4] / state.artifact_path)
+            self._v3_bundle = {
+                "model": artifact["model"] if isinstance(artifact, dict) else artifact,
+                "feature_list": (
+                    artifact.get("feature_list") if isinstance(artifact, dict)
+                    else state.metadata.get("feature_list", [])
+                ) or state.metadata.get("feature_list", []),
+                "metadata": state.metadata,
+            }
+        return self._v3_bundle
 
     def model_version(self) -> str:
         bundle = self._get_bundle()

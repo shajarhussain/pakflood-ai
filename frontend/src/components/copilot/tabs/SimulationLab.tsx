@@ -44,6 +44,7 @@ function riskLabel(score: number) {
 }
 
 export function SimulationLab({ district }: Props) {
+  // All hooks must run unconditionally.
   const modelStatus = useModelStatus();
   const v3Ready = isV3Available(modelStatus);
   const simFooter = v3Ready
@@ -52,11 +53,34 @@ export function SimulationLab({ district }: Props) {
   const [rainfall,    setRainfall]    = useState(0);
   const [dischargeIdx, setDischarge]  = useState(0);
   const [allStale,    setAllStale]    = useState(false);
-
   const proj = useMemo(
     () => computeProjected(district.risk_score, district.confidence, rainfall, dischargeIdx, allStale),
     [district, rainfall, dischargeIdx, allStale]
   );
+
+  // v3 strict: disable simulation entirely when artifact missing — we will not
+  // run "what-if" math on top of a legacy rule-based base score and present it
+  // as a prediction-model output. Hooks above still run unconditionally.
+  if (!v3Ready) {
+    return (
+      <div className="flex flex-col gap-3 animate-fade-up" data-testid="simulation-lab-unavailable">
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "rgba(252,165,165,0.04)", border: "1px solid rgba(252,165,165,0.30)" }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#FCA5A5" }}>
+            Simulation Lab · Disabled
+          </p>
+          <p className="text-sm" style={{ color: "#F1F5F9" }}>
+            Simulation disabled until real prediction artifact is available.
+          </p>
+          <p className="text-[10px] mt-2" style={{ color: "#94A3B8" }}>
+            Run the v3 real-data pipeline first.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const base  = { score: district.risk_score, confidence: district.confidence };
   const delta = proj.score - base.score;

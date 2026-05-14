@@ -55,6 +55,50 @@ export function RiskBrief({ district, explanation }: Props) {
     ? district.top_factors.map((f, i) => ({ label: f, weight: MOCK_FACTORS[i]?.weight ?? 0.5 }))
     : MOCK_FACTORS.slice(0, 3);
 
+  // v3 strict: when the calibrated artifact is missing, every model-output
+  // surface must be hidden. No 38% / HIGH pill / confidence bar / factor bars.
+  if (!v3Ready) {
+    return (
+      <div className="flex flex-col gap-4 animate-fade-up" data-testid="risk-brief-unavailable">
+        <div
+          className="rounded-xl p-4"
+          style={{
+            background: "rgba(252,165,165,0.04)",
+            border: "1px solid rgba(252,165,165,0.30)",
+          }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#FCA5A5" }}>
+            Real Prediction Model · Unavailable
+          </p>
+          <p className="text-sm font-semibold mb-3" style={{ color: "#F1F5F9" }}>
+            Real prediction model unavailable — run the real-data pipeline first.
+          </p>
+          <ul className="text-[11px] space-y-1 list-disc pl-4" style={{ color: "#94A3B8" }}>
+            <li>Legacy demo values hidden in real_prediction mode</li>
+            <li>Risk score, confidence and factor bars require the calibrated v3 artifact</li>
+            <li>See <span style={{ color: "#22D3EE" }}>docs/14_data_intake_manifest.md</span></li>
+            <li>See <span style={{ color: "#22D3EE" }}>docs/13_real_flood_prediction_pipeline_v3.md</span></li>
+          </ul>
+          <p className="text-[9px] mt-3" style={{ color: "#FCA5A5" }}>{modelLabel}</p>
+        </div>
+
+        <Section title="Source Health (adapter status — not v3 inputs)">
+          <div className="flex flex-col gap-1.5">
+            {SOURCES.map((s) => (
+              <div key={s.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#475569" }} />
+                  <span className="text-xs font-semibold" style={{ color: "#64748B" }}>{s.id}</span>
+                </div>
+                <span className="text-[10px]" style={{ color: "#475569" }}>{s.role}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 animate-fade-up">
       {/* Risk score card */}
@@ -71,7 +115,7 @@ export function RiskBrief({ district, explanation }: Props) {
               {explanation.risk_level.toUpperCase()}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>
-              Flood Intelligence · 72h window
+              Flood Intelligence · {modelStatus?.prediction_window ?? "T+1 to T+3 days"}
             </p>
           </div>
           <div className="text-right">
@@ -99,7 +143,7 @@ export function RiskBrief({ district, explanation }: Props) {
           </div>
         </div>
 
-        <p className="text-[10px] mt-2" style={{ color: v3Ready ? "#4B6280" : "#FCA5A5" }}>
+        <p className="text-[10px] mt-2" style={{ color: "#4B6280" }}>
           {modelLabel}
         </p>
       </div>

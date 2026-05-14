@@ -15,6 +15,7 @@ from app.hazards.flood.features import (
     build_rainfall_features,
 )
 from app.hazards.flood.model import get_flood_strategy
+from app.hazards.flood.v3_guard import ensure_v3_ready
 from app.schemas.risk import DISCLAIMER, DistrictRiskAssessment, RunModelResponse
 from app.services.disaster_risk_service import DisasterRiskService, get_disaster_risk_service
 
@@ -56,7 +57,12 @@ def run_risk_model(
 
     Any adapter failure falls back gracefully — the endpoint never raises.
     Results are persisted to RiskSnapshot via the service layer when a DB is available.
+
+    In ``MODEL_MODE=real_prediction`` with the calibrated artifact missing,
+    this endpoint returns HTTP 503 (no legacy rule-based scores are persisted
+    as v3 output).
     """
+    ensure_v3_ready()  # raises ModelArtifactMissingError → HTTP 503
     strategy = get_flood_strategy()
 
     # Fetch all three adapters once per batch.
