@@ -1,0 +1,293 @@
+{
+  "source": "NASA EONET v3",
+  "source_url": "https://eonet.gsfc.nasa.gov/api/v3/events?category=floods&status=all&limit=2000",
+  "total_events_returned": 667,
+  "pakistan_events": 15,
+  "events": [
+    {
+      "id": "EONET_20078",
+      "title": "Flood in Pakistan 1103877",
+      "description": null,
+      "closed": "2026-05-10T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103877"
+      ],
+      "geometry": [
+        {
+          "date": "2026-05-09T20:00:00Z",
+          "lon": 71.2678805,
+          "lat": 33.712802,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_19860",
+      "title": "Flood in Afghanistan 1103848",
+      "description": null,
+      "closed": "2026-04-23T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103848"
+      ],
+      "geometry": [
+        {
+          "date": "2026-04-21T20:00:00Z",
+          "lon": 67.666667,
+          "lat": 36.0,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_19082",
+      "title": "Flood in Afghanistan 1103815",
+      "description": null,
+      "closed": "2026-03-26T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103815"
+      ],
+      "geometry": [
+        {
+          "date": "2026-03-24T20:00:00Z",
+          "lon": 63.946629,
+          "lat": 32.103175,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_19109",
+      "title": "Flood in Pakistan 1103821",
+      "description": null,
+      "closed": "2026-03-29T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103821"
+      ],
+      "geometry": [
+        {
+          "date": "2026-03-24T20:00:00Z",
+          "lon": 71.2678805,
+          "lat": 33.712802,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_17933",
+      "title": "Flood in Afghanistan 1103765",
+      "description": null,
+      "closed": "2026-02-14T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103765"
+      ],
+      "geometry": [
+        {
+          "date": "2026-02-12T20:00:00Z",
+          "lon": 69.3947037,
+          "lat": 35.020922,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_16744",
+      "title": "Flood in Afghanistan 1103688",
+      "description": null,
+      "closed": "2025-12-31T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103688"
+      ],
+      "geometry": [
+        {
+          "date": "2025-12-29T20:00:00Z",
+          "lon": 62.380804,
+          "lat": 33.254378,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_15981",
+      "title": "Flood in India 1103618",
+      "description": null,
+      "closed": "2025-11-19T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103618"
+      ],
+      "geometry": [
+        {
+          "date": "2025-11-19T08:00:00Z",
+          "lon": 77.7392703087543,
+          "lat": 27.742109,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_15227",
+      "title": "Flood in Afghanistan 1103477",
+      "description": null,
+      "closed": "2025-08-30T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103477"
+      ],
+      "geometry": [
+        {
+          "date": "2025-08-28T20:00:00Z",
+          "lon": 70.3800314,
+          "lat": 34.220389,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_14847",
+      "title": "Flood in Pakistan 1103435",
+      "description": null,
+      "closed": "2025-08-15T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103435"
+      ],
+      "geometry": [
+        {
+          "date": "2025-08-13T20:00:00Z",
+          "lon": 71.4805341599303,
+          "lat": 34.0019893,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_14387",
+      "title": "Flood in Pakistan 1103389",
+      "description": null,
+      "closed": "2025-07-17T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103389"
+      ],
+      "geometry": [
+        {
+          "date": "2025-07-17T09:00:00Z",
+          "lon": 72.0,
+          "lat": 31.0,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_14134",
+      "title": "Flood in Afghanistan 1103353",
+      "description": null,
+      "closed": "2025-06-28T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103353"
+      ],
+      "geometry": [
+        {
+          "date": "2025-06-26T20:00:00Z",
+          "lon": 69.682647,
+          "lat": 33.381189,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_14108",
+      "title": "Flood in Pakistan 1103347",
+      "description": null,
+      "closed": "2025-06-27T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103347"
+      ],
+      "geometry": [
+        {
+          "date": "2025-06-25T20:00:00Z",
+          "lon": 72.3607712,
+          "lat": 34.7725375,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_13950",
+      "title": "Flood in India 1103334",
+      "description": null,
+      "closed": "2025-06-17T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103334"
+      ],
+      "geometry": [
+        {
+          "date": "2025-06-15T20:00:00Z",
+          "lon": 71.6689616993011,
+          "lat": 22.04670975,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_13476",
+      "title": "Flood in Pakistan 1103257",
+      "description": null,
+      "closed": "2025-05-04T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103257"
+      ],
+      "geometry": [
+        {
+          "date": "2025-05-03T20:00:00Z",
+          "lon": 71.0950863,
+          "lat": 33.1160464,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    },
+    {
+      "id": "EONET_13465",
+      "title": "Flood in Afghanistan 1103252",
+      "description": null,
+      "closed": "2025-05-03T00:00:00Z",
+      "sources": [
+        "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1103252"
+      ],
+      "geometry": [
+        {
+          "date": "2025-05-01T20:00:00Z",
+          "lon": 71.367658,
+          "lat": 36.8040254,
+          "type": "Point",
+          "magnitudeValue": null,
+          "magnitudeUnit": null
+        }
+      ]
+    }
+  ]
+}

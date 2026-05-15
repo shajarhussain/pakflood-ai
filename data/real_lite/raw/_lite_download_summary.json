@@ -1,0 +1,87 @@
+{
+  "sources": {
+    "boundaries": {
+      "ok": true,
+      "path": "data/real_lite/raw/boundaries/pakistan_districts.geojson",
+      "cached": true
+    },
+    "weather": [
+      {
+        "ok": true,
+        "district_id": "PK-SD-SKR",
+        "path": "data/real_lite/raw/weather/PK-SD-SKR.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=68.85&latitude=27.7&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-SD-JCB",
+        "path": "data/real_lite/raw/weather/PK-SD-JCB.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=68.35&latitude=28.45&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-SD-LRK",
+        "path": "data/real_lite/raw/weather/PK-SD-LRK.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=67.9&latitude=27.45&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-PB-MUL",
+        "path": "data/real_lite/raw/weather/PK-PB-MUL.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=71.55&latitude=30.3&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-PB-RWP",
+        "path": "data/real_lite/raw/weather/PK-PB-RWP.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=73.05&latitude=33.65&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-PB-LHR",
+        "path": "data/real_lite/raw/weather/PK-PB-LHR.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=74.4&latitude=31.55&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-KP-PSH",
+        "path": "data/real_lite/raw/weather/PK-KP-PSH.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=71.7&latitude=34.1&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-BL-QTA",
+        "path": "data/real_lite/raw/weather/PK-BL-QTA.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=67.05&latitude=30.2&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-BL-NAS",
+        "path": "data/real_lite/raw/weather/PK-BL-NAS.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=68.15&latitude=28.85&start=20150101&end=20260510&format=JSON"
+      },
+      {
+        "ok": true,
+        "district_id": "PK-GB-GIL",
+        "path": "data/real_lite/raw/weather/PK-GB-GIL.csv",
+        "rows": 4148,
+        "source_url": "https://power.larc.nasa.gov/api/temporal/daily/point?parameters=PRECTOTCORR,T2M,RH2M,WS10M&community=AG&longitude=74.2&latitude=36.0&start=20150101&end=20260510&format=JSON"
+      }
+    ],
+    "events": {
+      "ok": true,
+      "path": "data/real_lite/raw/reports/eonet_floods.json",
+      "total_events_returned": 667,
+      "pakistan_events": 15
+    }
+  }
+}

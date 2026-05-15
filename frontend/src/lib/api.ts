@@ -35,17 +35,38 @@ export interface ModelStatus {
   is_prediction_model: boolean;
   model_name: string | null;
   model_type: string | null;
+  model_scope: string | null;
   prediction_window: string | null;
   calibration_method: string | null;
   calibration_api: string | null;
   last_trained_iso: string | null;
   data_sources: Record<string, string> | null;
   metric_crs: string | null;
+  limitations: string[] | null;
   remediation: string | null;
 }
 
 export const MODEL_UNAVAILABLE_MESSAGE =
   "Real prediction model unavailable — run the real-data pipeline first.";
+
+/** True when this is the Gate B-Lite weak-label prototype (vs strict v3). */
+export function isLitePrediction(status: ModelStatus | null | undefined): boolean {
+  return !!status && status.model_name === "flood_prediction_real_lite";
+}
+
+/** True when this is the Phase 10 dataset-based real-file model. */
+export function isDatasetBased(status: ModelStatus | null | undefined): boolean {
+  return !!status && status.model_name === "flood_prediction_dataset_based";
+}
+
+/** Pretty label for the active model badge. */
+export function modelBadgeLabel(status: ModelStatus | null | undefined): string {
+  if (!isV3Available(status)) return MODEL_UNAVAILABLE_MESSAGE;
+  const win = status?.prediction_window ? ` · ${status.prediction_window}` : "";
+  if (isDatasetBased(status)) return `Real prediction · dataset-based${win}`;
+  if (isLitePrediction(status)) return `Real prediction v3-lite${win}`;
+  return `Real prediction v3${win}`;
+}
 
 /** Returns the live model status; null if the backend is unreachable. */
 export async function fetchModelStatus(): Promise<ModelStatus | null> {

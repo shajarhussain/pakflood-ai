@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -29,6 +27,12 @@ services:
       ENVIRONMENT: development
     volumes:
       - ./backend:/app
+      # Mount the v3 training tree and real-data tree on top of /app so the
+      # backend container can run the Gate B pipeline scripts and the contract
+      # check directly. Relative paths inside the scripts resolve cleanly
+      # because /app is also the container's WORKDIR.
+      - ./ml:/app/ml
+      - ./data:/app/data
     depends_on:
       db:
         condition: service_healthy

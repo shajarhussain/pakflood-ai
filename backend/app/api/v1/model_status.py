@@ -19,15 +19,20 @@ router = APIRouter()
 
 
 def _project_root() -> Path:
-    # backend/app/api/v1/model_status.py → backend/app/api/v1 → backend/app/api → backend/app → backend → project_root
-    return Path(__file__).resolve().parents[4]
+    """Find the project root that contains ``ml/`` (host AND container)."""
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        if (ancestor / "ml").is_dir():
+            return ancestor
+    return Path.cwd()
 
 
 @router.get("/model/status")
 def get_model_status() -> dict:
     root = _project_root()
-    artifact_path = root / settings.PREDICTION_MODEL_PATH
-    metadata_path = root / settings.PREDICTION_METADATA_PATH
+    artifact_rel, metadata_rel = settings.active_model_paths()
+    artifact_path = root / artifact_rel
+    metadata_path = root / metadata_rel
 
     artifact_exists = artifact_path.exists() and artifact_path.is_file()
     metadata_exists = metadata_path.exists() and metadata_path.is_file()
@@ -44,20 +49,26 @@ def get_model_status() -> dict:
     return {
         "mode": settings.MODEL_MODE,
         "artifact_exists": artifact_exists,
-        "artifact_path": settings.PREDICTION_MODEL_PATH,
+        "artifact_path": artifact_rel,
         "metadata_exists": metadata_exists,
-        "metadata_path": settings.PREDICTION_METADATA_PATH,
+        "metadata_path": metadata_rel,
         "is_prediction_model": is_prediction_model,
         "model_name": metadata.get("model_name"),
         "model_type": metadata.get("model_type"),
+        "model_scope": metadata.get("model_scope"),
         "prediction_window": metadata.get("prediction_window"),
         "calibration_method": metadata.get("calibration_method"),
         "calibration_api": metadata.get("calibration_api"),
         "last_trained_iso": metadata.get("trained_at_iso"),
         "data_sources": metadata.get("data_sources"),
         "metric_crs": metadata.get("metric_crs"),
+        "limitations": metadata.get("limitations"),
         "remediation": (
             None if (artifact_exists and is_prediction_model)
-            else "Real prediction model unavailable — run the real-data pipeline first."
+            else (
+                "Real prediction model unavailable — run the real-data pipeline first."
+                if settings.MODEL_MODE == "real_prediction"
+                else "Real-lite prediction model unavailable — run ml/training/train_real_lite_model.py first."
+            )
         ),
     }
