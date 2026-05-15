@@ -54,13 +54,18 @@ export function isLitePrediction(status: ModelStatus | null | undefined): boolea
   return !!status && status.model_name === "flood_prediction_real_lite";
 }
 
+/** True when this is the Phase 10 dataset-based real-file model. */
+export function isDatasetBased(status: ModelStatus | null | undefined): boolean {
+  return !!status && status.model_name === "flood_prediction_dataset_based";
+}
+
 /** Pretty label for the active model badge. */
 export function modelBadgeLabel(status: ModelStatus | null | undefined): string {
   if (!isV3Available(status)) return MODEL_UNAVAILABLE_MESSAGE;
-  if (isLitePrediction(status)) {
-    return `Real prediction v3-lite${status?.prediction_window ? ` · ${status.prediction_window}` : ""}`;
-  }
-  return `Real prediction v3${status?.prediction_window ? ` · ${status.prediction_window}` : ""}`;
+  const win = status?.prediction_window ? ` · ${status.prediction_window}` : "";
+  if (isDatasetBased(status)) return `Real prediction · dataset-based${win}`;
+  if (isLitePrediction(status)) return `Real prediction v3-lite${win}`;
+  return `Real prediction v3${win}`;
 }
 
 /** Returns the live model status; null if the backend is unreachable. */

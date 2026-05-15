@@ -27,23 +27,27 @@ class Settings(BaseSettings):
     NASA_EARTHDATA_PASSWORD: str = ""
 
     # PakFlood AI v3 — Real Prediction Pipeline
-    # Two valid modes:
-    #   "real_prediction"      — strict 8-source research-grade v3 model
-    #   "real_lite_prediction" — Gate B-Lite weak-label public-API prototype
-    # In either mode there is no synthetic / baseline fallback. If the
-    # configured artifact is missing, /api/v1/model/status reports
-    # artifact_exists=false and the frontend chrome shows the honest
-    # unavailable message.
-    MODEL_MODE: str = "real_lite_prediction"
+    # Three valid modes:
+    #   "real_prediction"         — strict 8-source research-grade v3 model
+    #   "real_lite_prediction"    — Gate B-Lite weak-label public-API prototype
+    #   "dataset_based_prediction" — Phase 10 dataset-based real-file model
+    # No synthetic / baseline fallback in any mode. If the configured
+    # artifact is missing, /api/v1/model/status reports artifact_exists=false
+    # and the frontend chrome shows the honest unavailable message.
+    MODEL_MODE: str = "dataset_based_prediction"
     PREDICTION_MODEL_PATH: str = "ml/artifacts/flood_prediction_calibrated_v3.pkl"
     PREDICTION_METADATA_PATH: str = "ml/artifacts/flood_prediction_metadata_v3.json"
     REAL_LITE_MODEL_PATH: str = "ml/artifacts/flood_prediction_real_lite.pkl"
     REAL_LITE_METADATA_PATH: str = "ml/artifacts/flood_prediction_real_lite_metadata.json"
+    DATASET_BASED_MODEL_PATH: str = "ml/artifacts/flood_prediction_dataset_based.pkl"
+    DATASET_BASED_METADATA_PATH: str = "ml/artifacts/flood_prediction_dataset_based_metadata.json"
 
     def active_model_paths(self) -> tuple[str, str]:
         """Return (artifact_path, metadata_path) for the active MODEL_MODE."""
         if self.MODEL_MODE == "real_lite_prediction":
             return self.REAL_LITE_MODEL_PATH, self.REAL_LITE_METADATA_PATH
+        if self.MODEL_MODE == "dataset_based_prediction":
+            return self.DATASET_BASED_MODEL_PATH, self.DATASET_BASED_METADATA_PATH
         return self.PREDICTION_MODEL_PATH, self.PREDICTION_METADATA_PATH
 
 

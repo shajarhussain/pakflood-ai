@@ -1,0 +1,122 @@
+{
+  "families": [
+    {
+      "family": "boundaries",
+      "path": "data/real_dataset/raw/boundaries/pakistan_districts.geojson",
+      "ok": true,
+      "kind": "vector",
+      "feature_count": 126,
+      "crs": "EPSG:4326",
+      "bounds": [
+        60.877,
+        23.731,
+        77.815,
+        37.004
+      ],
+      "bounds_overlaps_pakistan": true,
+      "bounds_subset_of_pakistan": true
+    },
+    {
+      "family": "chirps_dir",
+      "path": "data/real_dataset/raw/rainfall_chirps",
+      "ok": true,
+      "kind": "raster_dir",
+      "file_count": 46,
+      "total_size_mb": 2650.36,
+      "sample_file": "chirps_2022-08-01.tif",
+      "sample_crs": "EPSG:4326",
+      "sample_shape": [
+        7200,
+        2000
+      ]
+    },
+    {
+      "family": "hydrorivers",
+      "path": "data/real_dataset/raw/rivers/hydrorivers_pakistan.geojson",
+      "ok": true,
+      "kind": "vector",
+      "feature_count": 462,
+      "crs": "EPSG:4326",
+      "bounds": [
+        -165.244,
+        -50.24,
+        176.326,
+        73.335
+      ],
+      "bounds_overlaps_pakistan": true,
+      "bounds_subset_of_pakistan": false
+    },
+    {
+      "family": "elevation",
+      "path": "data/real_dataset/raw/elevation/dem.tif",
+      "ok": true,
+      "kind": "raster",
+      "crs": "EPSG:4326",
+      "width": 21600,
+      "height": 19200,
+      "band_count": 1,
+      "pixel_size": [
+        0.00083,
+        0.00083
+      ],
+      "bounds": [
+        60.0,
+        22.0,
+        78.0,
+        38.0
+      ],
+      "size_mb": 420.9
+    },
+    {
+      "family": "population",
+      "path": "data/real_dataset/raw/population/worldpop_pakistan.tif",
+      "ok": true,
+      "kind": "raster",
+      "crs": "EPSG:4326",
+      "width": 2032,
+      "height": 1608,
+      "band_count": 1,
+      "pixel_size": [
+        0.00833,
+        0.00833
+      ],
+      "bounds": [
+        60.907,
+        23.7,
+        77.84,
+        37.1
+      ],
+      "size_mb": 5.69
+    },
+    {
+      "family": "flood_extents",
+      "ok": false,
+      "path": "data/real_dataset/raw/flood_extents/unosat_flood_extents.geojson",
+      "reason": "missing"
+    },
+    {
+      "family": "glofas",
+      "ok": false,
+      "path": "data/real_dataset/raw/glofas/glofas_district_daily.csv",
+      "reason": "missing"
+    },
+    {
+      "family": "imerg_dir",
+      "path": "data/real_dataset/raw/rainfall_imerg",
+      "ok": false,
+      "kind": "raster_dir",
+      "file_count": 0
+    }
+  ],
+  "summary": {
+    "valid_count": 5,
+    "valid_families": [
+      "boundaries",
+      "chirps_dir",
+      "hydrorivers",
+      "elevation",
+      "population"
+    ],
+    "meets_4_family_gate": true
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "started_at": "2026-05-15T05:21:42",
+  "out_root": "data/real_dataset/raw",
+  "requested_sources": [
+    "boundaries",
+    "chirps",
+    "hydrorivers",
+    "dem",
+    "worldpop",
+    "unosat",
+    "glofas",
+    "imerg"
+  ],
+  "results": [
+    {
+      "family": "boundaries",
+      "status": "ok",
+      "path": "data/real_dataset/raw/boundaries/pakistan_districts.geojson",
+      "bytes": 1007966,
+      "source": "reused from data/real_lite (geoBoundaries gbOpen)"
+    },
+    {
+      "family": "chirps",
+      "status": "ok",
+      "path": "data/real_dataset/raw/rainfall_chirps",
+      "file_count": 46,
+      "bytes": 2650364244,
+      "date_range": [
+        "2022-08-01",
+        "2022-09-15"
+      ],
+      "failure_count": 0,
+      "source": "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/tifs/p05/{year}/chirps-v2.0.YYYY.MM.DD.tif.gz"
+    },
+    {
+      "family": "hydrorivers",
+      "status": "ok",
+      "path": "data/real_dataset/raw/rivers/hydrorivers_pakistan.geojson",
+      "bytes": 827318,
+      "source": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson",
+      "provenance": "Natural Earth 50m rivers (Pakistan subset filtered downstream); documented as proxy until full HydroRIVERS clip is available."
+    },
+    {
+      "family": "dem",
+      "status": "ok",
+      "path": "data/real_dataset/raw/elevation/dem.tif",
+      "bytes": 420898657,
+      "source": "OpenTopography SRTMGL3 Pakistan bbox"
+    },
+    {
+      "family": "worldpop",
+      "status": "ok",
+      "path": "data/real_dataset/raw/population/worldpop_pakistan.tif",
+      "bytes": 5693329,
+      "source": "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/PAK/pak_ppp_2020_1km_Aggregated.tif"
+    },
+    {
+      "family": "unosat",
+      "status": "failed",
+      "reason": "No known direct GeoJSON URL succeeded for UNOSAT Pakistan flood extents.",
+      "attempted_sources": [
+        "https://data.humdata.org/dataset/2cab84d3-50b4-4cd0-bc41-9d5fcc56b6d6/resource/fad5d2dd-e6bd-419b-9d27-46fff2e2bbd5/download/unosat_flood_pakistan_2022.geojson",
+        "https://unosat.org/static/unosat_filesystem/3322/UNOSAT_A2614_PAK_FloodWaters_20220825_GeoJSON.geojson"
+      ],
+      "next_step": "Visit https://data.humdata.org/search?q=unosat%20pakistan%20flood to manually download a current FeatureCollection and place it at data/real_dataset/raw/flood_extents/unosat_flood_extents.geojson."
+    },
+    {
+      "family": "glofas",
+      "status": "auth_required",
+      "required_env_vars": [
+        "CDSAPI_URL",
+        "CDSAPI_KEY"
+      ],
+      "note": "Copernicus GloFAS requires a CDS API key. v3 ingests a pre-aggregated district-day CSV at data/real_dataset/raw/glofas/glofas_district_daily.csv; raw NetCDF/GRIB \u2192 CSV conversion is out of scope.",
+      "source": "https://cds.climate.copernicus.eu/api-how-to"
+    },
+    {
+      "family": "imerg",
+      "status": "auth_required",
+      "required_env_vars": [
+        "NASA_EARTHDATA_USERNAME",
+        "NASA_EARTHDATA_PASSWORD"
+      ],
+      "note": "NASA GPM IMERG Final Run requires Earthdata Login. Alternative: Google Earth Engine NASA/GPM_L3/IMERG_V07 export with GEE_SERVICE_ACCOUNT/GEE_KEY_FILE.",
+      "source": "https://urs.earthdata.nasa.gov/"
+    }
+  ],
+  "summary": {
+    "ok": 5,
+    "auth_required": 2,
+    "failed": 1,
+    "ok_families": [
+      "boundaries",
+      "chirps",
+      "hydrorivers",
+      "dem",
+      "worldpop"
+    ],
+    "failed_families": [
+      "unosat"
+    ],
+    "auth_required_families": [
+      "glofas",
+      "imerg"
+    ],
+    "meets_4_family_gate": true
+  }
+}

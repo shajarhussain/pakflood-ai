@@ -127,13 +127,15 @@ def ensure_v3_ready() -> V3ArtifactState:
     exists only for legacy tests that pin a different mode via env var.
     """
     state = v3_artifact_state()
-    if settings.MODEL_MODE not in ("real_prediction", "real_lite_prediction"):
+    if settings.MODEL_MODE not in (
+        "real_prediction", "real_lite_prediction", "dataset_based_prediction",
+    ):
         return state
 
-    # Gate B-Lite: even when artifact exists, the risk endpoints have no
-    # live feature provider yet. Block them with a distinct message so the
-    # frontend never displays a legacy rule-based score as v3-lite output.
-    if settings.MODEL_MODE == "real_lite_prediction":
+    # Gate B-Lite or dataset-based: even with the artifact present, no live
+    # feature provider for the risk endpoints is wired yet. Block them with
+    # a distinct message so legacy rule scores never leak through as v3 output.
+    if settings.MODEL_MODE in ("real_lite_prediction", "dataset_based_prediction"):
         if not state.artifact_exists:
             raise ModelArtifactMissingError(
                 reason=(

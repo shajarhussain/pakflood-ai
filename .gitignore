@@ -49,3 +49,12 @@ Thumbs.db
 
 # Docker
 postgres_data/
+
+# Phase 10 — large real dataset rasters are not committed (2.9 GB).
+# acquisition_report.json + file_validation_report.json + metadata
+# document what is on disk so other clones can re-acquire via
+# `python ml/training/acquire_real_datasets.py`.
+data/real_dataset/raw/rainfall_chirps/chirps_*.tif
+data/real_dataset/raw/rainfall_imerg/*.tif
+data/real_dataset/raw/elevation/dem.tif
+data/real_dataset/raw/population/worldpop_pakistan.tif
