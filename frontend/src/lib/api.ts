@@ -11,7 +11,13 @@ import {
   type MockFloodEvent,
 } from "@/data/mock";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+declare const process: {
+  env: {
+    NEXT_PUBLIC_API_URL?: string;
+  };
+};
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://pakflood-ai.onrender.com/api/v1";
 
 // ---------------------------------------------------------------------------
 // Response types (mirror backend Pydantic schemas)
@@ -137,7 +143,7 @@ export interface ApiLocationResult {
 
 async function apiFetch<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}${path}`);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
