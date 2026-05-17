@@ -29,9 +29,9 @@ class Settings(BaseSettings):
     ADMIN_API_KEY: str = ""  # set in .env — required to hit /admin/* endpoints
 
     # ── Zone grid computation ─────────────────────────────────────────────────
-    GRID_STEP_DEGREES: float = 0.25
-    ZONE_CACHE_TTL_MINUTES: int = 60
-    OPEN_METEO_REQUEST_DELAY_SEC: float = 0.35  # delay between sequential requests
+    GRID_STEP_DEGREES: float = 0.5
+    ZONE_CACHE_TTL_MINUTES: int = 180
+    OPEN_METEO_REQUEST_DELAY_SEC: float = 0.70  # delay between sequential requests
     OPEN_METEO_MAX_RETRIES: int = 4             # retries on 429 / transient errors
     OPEN_METEO_RETRY_BASE_SEC: float = 15.0     # backoff base: 15s, 30s, 60s, 120s
     ZONE_STARTUP_DELAY_SEC: int = 60            # wait before first computation on startup

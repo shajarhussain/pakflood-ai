@@ -81,6 +81,9 @@ class ZoneRepository:
             return None
 
         completed_at = datetime.fromisoformat(completed_at_str.replace("Z", "+00:00"))
+        # Ensure both datetimes are timezone-aware before subtracting
+        if completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         return (now - completed_at).total_seconds() / 60.0
 

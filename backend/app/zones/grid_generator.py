@@ -26,7 +26,7 @@ import numpy as np
 from app.core.config import settings
 from app.hazards.flood.features import FEATURE_COLS
 from app.hazards.flood.rules import classify_risk
-from app.zones.open_meteo_adapter import fetch_weather_features, features_to_vector
+from app.zones.open_meteo_adapter import RATE_LIMITED, fetch_weather_features, features_to_vector
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +63,14 @@ async def predict_single_point(
     """
     Fetch weather → build vector → predict for one grid point.
 
-    Returns a flat dict with all 14 input features + prediction outputs +
-    top-3 importances ready for zone_grid_points INSERT.
-    Returns None if Open-Meteo fails (caller skips this point).
+    Returns a flat dict on success.
+    Returns RATE_LIMITED sentinel when the 429 retry budget is exhausted
+    (caller should add a longer cooldown before the next request).
+    Returns None on any other transient failure (caller skips the point).
     """
     features = await fetch_weather_features(lat, lng, client)
+    if features is RATE_LIMITED:
+        return RATE_LIMITED   # propagate so the outer loop can cool down
     if features is None:
         return None
 
@@ -141,11 +144,11 @@ async def compute_all_zones(model) -> list[dict]:
     """
     Run predictions for every Pakistan grid point.
 
-    Processes points ONE AT A TIME with a small delay between each request
-    to stay within Open-Meteo's free-tier rate limit (~1 req/s).
-
-    At 0.3 s/request × 3,685 points ≈ 18 minutes per run — acceptable
-    for a background job that fires every 60 minutes.
+    Processes points ONE AT A TIME.  Uses adaptive rate control:
+      - Normal delay: OPEN_METEO_REQUEST_DELAY_SEC between each request.
+      - After a 429 cascade (all retries exhausted): 3-minute cooldown,
+        then doubles the per-request delay for subsequent points so we
+        stay comfortably under the rate limit for the rest of the run.
 
     Args:
         model: FloodModel wrapper or raw XGBoost object — both accepted.
@@ -154,11 +157,12 @@ async def compute_all_zones(model) -> list[dict]:
 
     grid          = generate_pakistan_grid()
     total         = len(grid)
-    delay         = settings.OPEN_METEO_REQUEST_DELAY_SEC
-    log_every     = 200   # log progress every N points
+    base_delay    = settings.OPEN_METEO_REQUEST_DELAY_SEC
+    current_delay = base_delay
+    rate_cooldown = 180.0   # pause (s) after 429 exhaustion before next request
+    log_every     = 200
 
-    logger.info("Zone computation started: %d points, %.1fs delay each (~%.0f min)",
-                total, delay, total * delay / 60)
+    logger.info("Zone computation started: %d points, %.2fs base delay", total, base_delay)
 
     importances   = np.array(xgb.feature_importances_)
     feature_names = list(FEATURE_COLS)
@@ -171,18 +175,29 @@ async def compute_all_zones(model) -> list[dict]:
                 lat, lng, client, xgb, importances, feature_names
             )
 
-            if result is not None:
+            if result is RATE_LIMITED:
+                failed_cnt += 1
+                # All retries exhausted — rate window still open.
+                # Wait for it to clear, then slow down permanently.
+                new_delay = min(current_delay * 2, 3.0)
+                logger.warning(
+                    "Rate limit exhausted at point %d/%d — cooling down %.0fs, "
+                    "then delay %.2fs→%.2fs for remaining points",
+                    i + 1, total, rate_cooldown, current_delay, new_delay,
+                )
+                await asyncio.sleep(rate_cooldown)
+                current_delay = new_delay
+            elif result is not None:
                 results.append(result)
             else:
                 failed_cnt += 1
 
             if (i + 1) % log_every == 0 or (i + 1) == total:
-                logger.info("Zone progress: %d/%d  (ok=%d failed=%d)",
-                            i + 1, total, len(results), failed_cnt)
+                logger.info("Zone progress: %d/%d  (ok=%d failed=%d delay=%.2fs)",
+                            i + 1, total, len(results), failed_cnt, current_delay)
 
-            # Per-request delay — keeps us under Open-Meteo free-tier rate limit
             if i < total - 1:
-                await asyncio.sleep(delay)
+                await asyncio.sleep(current_delay)
 
     logger.info("Zone computation complete: %d succeeded, %d failed, %d total",
                 len(results), failed_cnt, total)
