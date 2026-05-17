@@ -48,7 +48,24 @@ class ZoneRepository:
     def get_latest_zone_points(self) -> list[dict]:
         """
         Return all grid-point rows from the latest complete batch.
+        Paginates in _CHUNK_SIZE pages to work around Supabase's 1 000-row cap.
         Returns [] if no complete batch exists.
+        """
+        batch = self.get_latest_batch()
+        if batch is None:
+            return []
+        return self._fetch_all_points(batch["id"])
+
+    def get_zone_points_in_bbox(
+        self,
+        min_lat: float,
+        max_lat: float,
+        min_lng: float,
+        max_lng: float,
+    ) -> list[dict]:
+        """
+        Return zone points from the latest batch within a lat/lng bounding box.
+        Used by the district endpoint to avoid fetching all ~3 000+ points.
         """
         batch = self.get_latest_batch()
         if batch is None:
@@ -58,10 +75,34 @@ class ZoneRepository:
             self._db.table("zone_grid_points")
             .select("*")
             .eq("batch_id", batch["id"])
+            .gte("lat", min_lat)
+            .lte("lat", max_lat)
+            .gte("lng", min_lng)
+            .lte("lng", max_lng)
             .limit(_MAX_ROWS)
             .execute()
         )
         return result.data or []
+
+    def _fetch_all_points(self, batch_id: str) -> list[dict]:
+        """Paginate through zone_grid_points in pages of 1 000 rows."""
+        rows: list[dict] = []
+        page_size = 1000
+        offset    = 0
+        while True:
+            result = (
+                self._db.table("zone_grid_points")
+                .select("*")
+                .eq("batch_id", batch_id)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            page = result.data or []
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+        return rows
 
     def is_cache_fresh(self) -> bool:
         """True if the latest complete batch is younger than ZONE_CACHE_TTL_MINUTES."""
