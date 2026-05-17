@@ -1,348 +1,103 @@
-"""
-FloodPredictionStrategy — implements the HazardModule Protocol.
-
-v3 strict mode (the only deployed mode):
-  - When ``settings.MODEL_MODE == "real_prediction"``, every model-dependent
-    code path requires the calibrated v3 artifact on disk. The legacy
-    rule-based path and the old baseline_v1.pkl artifact are NOT executed.
-  - The guard lives in ``app.hazards.flood.v3_guard``; routes call
-    ``ensure_v3_ready()`` before reaching the strategy.
-
-The legacy rule-based path and baseline-v1 loader are preserved for the
-backward-compatibility tests that pin ``MODEL_MODE = "legacy_demo"``.
-"""
+"""XGBoost flood prediction model — lazy singleton loader."""
 
 from __future__ import annotations
 
-import math
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from app.hazards.base import (
-    DataSourceSpec,
-    FeatureFrame,
-    HazardModule,
-    ModelArtifact,
-    RiskAssessment,
-    RiskExplanation,
-    RiskRequest,
-    TrainingConfig,
-)
-from app.hazards.flood.features import (
-    DISTRICT_STATIC_FEATURES,
-    FEATURE_NAMES,
-    build_feature_vector,
-    get_stub_features,
-)
+import numpy as np
+
+from app.hazards.flood.features import FEATURE_COLS
 from app.hazards.flood.rules import DISCLAIMER, classify_risk
 
-# Resolve artifact path relative to this file (5 hops up to project root)
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]
-_ARTIFACT_PATH = _PROJECT_ROOT / "ml" / "artifacts" / "flood_baseline_v1.pkl"
-
-# District center coordinates for lat/lon → district_id lookup
-_DISTRICT_CENTERS: dict[str, tuple[float, float]] = {
-    "PK-SD-SKR": (27.70, 68.85),
-    "PK-SD-JCB": (28.45, 68.35),
-    "PK-SD-LRK": (27.45, 67.90),
-    "PK-PB-MUL": (30.30, 71.55),
-    "PK-PB-RWP": (33.65, 73.05),
-    "PK-PB-LHR": (31.55, 74.40),
-    "PK-KP-PSH": (34.10, 71.70),
-    "PK-BL-QTA": (30.20, 67.05),
-    "PK-BL-NAS": (28.85, 68.15),
-    "PK-GB-GIL": (36.00, 74.20),
-}
+MODEL_VERSION = "flood_xgb_pakistan_v2"
 
 
-@dataclass
-class _ModelBundle:
-    model: Any
-    feature_names: list[str]
-    label_to_level: dict[int, str]
-    model_version: str
-    top_features: list[str]
-    feature_importances: dict[str, float]
+def _find_artifact() -> Path:
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        candidate = ancestor / "ml" / "artifacts" / f"{MODEL_VERSION}.pkl"
+        if candidate.exists():
+            return candidate
+    return Path.cwd() / "ml" / "artifacts" / f"{MODEL_VERSION}.pkl"
 
 
-def _load_bundle() -> _ModelBundle | None:
-    """Attempt to load the trained model bundle. Returns None if unavailable."""
-    if not _ARTIFACT_PATH.exists():
-        return None
-    try:
-        import joblib
-        raw = joblib.load(_ARTIFACT_PATH)
-        return _ModelBundle(
-            model=raw["model"],
-            feature_names=raw["feature_names"],
-            label_to_level={int(k): v for k, v in raw["label_to_level"].items()},
-            model_version=raw["model_version"],
-            top_features=raw["top_features"],
-            feature_importances=raw["feature_importances"],
-        )
-    except Exception as exc:
-        warnings.warn(f"Could not load flood model artifact: {exc}", stacklevel=2)
-        return None
-
-
-def _nearest_district(lat: float, lon: float) -> str:
-    """Return the district_id whose center is nearest to (lat, lon)."""
-    best_id = "PK-SD-SKR"
-    best_dist = float("inf")
-    for district_id, (dlat, dlon) in _DISTRICT_CENTERS.items():
-        d = math.hypot(lat - dlat, lon - dlon)
-        if d < best_dist:
-            best_dist = d
-            best_id = district_id
-    return best_id
-
-
-def v3_confidence_from_probability(probability: float) -> float:
-    """Confidence as distance from the 0.5 decision boundary.
-
-    Stage-1 spec: ``confidence = 2 * |p - 0.5|``. Uncertainty is ``1 - confidence``.
-
-    Examples:
-        p=0.5 → confidence 0.0
-        p=0.9 → confidence 0.8
-        p=0.1 → confidence 0.8
-        p=1.0 → confidence 1.0
-        p=0.0 → confidence 1.0
-    """
-    return 2.0 * abs(probability - 0.5)
-
-
-def v3_risk_level(probability: float) -> str:
-    """Map a calibrated probability to the v3 risk band."""
-    if probability < 0.30:
-        return "Low"
-    if probability < 0.55:
-        return "Moderate"
-    if probability < 0.75:
-        return "High"
-    return "Severe"
-
-
-# Columns that may appear in pakistan_flood_prediction_v3.csv but MUST NOT be
-# passed to the model as input features (labels / leakage / non-numeric).
-V3_LEAKAGE_COLUMNS: frozenset[str] = frozenset({
-    "observed_flood_today",
-    "flood_next_24h", "flood_next_72h", "flood_next_7d",
-    "label_source", "feature_source_summary",
-    "date", "district_name", "province", "metric_crs",
-    "source_raster", "source_type", "district_id", "day_of_year",
-})
-
-
-def _rule_based_score(features: dict[str, float]) -> float:
-    """Simple deterministic score used when the model artifact is absent."""
-    river_prox = max(0.0, 1.0 - features.get("distance_to_river_km", 10.0) / 30.0)
-    elevation_risk = max(0.0, 1.0 - features.get("elevation_mean_m", 300.0) / 2000.0)
-    flood_history = min(1.0, features.get("historical_flood_count", 3.0) / 10.0)
-    rainfall_7d = min(1.0, features.get("rainfall_7d_mm", 0.0) / 400.0)
-    return min(1.0, 0.30 * river_prox + 0.25 * elevation_risk + 0.25 * flood_history + 0.20 * rainfall_7d)
-
-
-class FloodPredictionStrategy:
-    """Flood risk prediction implementing the HazardModule Protocol."""
-
-    hazard_name: str = "flood"
-
+class FloodModel:
     def __init__(self) -> None:
-        self._bundle: _ModelBundle | None = None
-        self._bundle_loaded: bool = False
+        self._model = None
+        self._loaded = False
 
-    # ── Protocol methods ──────────────────────────────────────────────────────
+    def _load(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        path = _find_artifact()
+        if not path.exists():
+            warnings.warn(
+                f"Flood model artifact not found at {path}. "
+                "Predictions will return risk_level='Unknown'. "
+                "Place flood_xgb_pakistan_v2.pkl in ml/artifacts/.",
+                stacklevel=2,
+            )
+            return
+        try:
+            import joblib
+            self._model = joblib.load(path)
+        except Exception as exc:
+            warnings.warn(f"Failed to load flood model: {exc}", stacklevel=2)
 
-    def get_required_sources(self) -> list[DataSourceSpec]:
-        return [
-            DataSourceSpec(source_id="imerg", adapter_class="IMERGAdapter"),
-            DataSourceSpec(source_id="glofas", adapter_class="GloFASAdapter"),
-            DataSourceSpec(source_id="ffd", adapter_class="FFDAdapter"),
+    def predict(self, features: dict[str, float]) -> dict:
+        self._load()
+
+        vec = np.array(
+            [[features.get(f, 0.0) for f in FEATURE_COLS]], dtype=np.float32
+        )
+
+        if self._model is None:
+            return {
+                "flood_probability": 0.5,
+                "risk_level": "Unknown",
+                "confidence": 0.0,
+                "top_factors": [],
+                "model_version": f"{MODEL_VERSION} (unavailable)",
+                "disclaimer": DISCLAIMER,
+            }
+
+        prob = float(self._model.predict_proba(vec)[0][1])
+        risk_level = classify_risk(prob)
+        confidence = round(2.0 * abs(prob - 0.5), 4)
+
+        importances = self._model.feature_importances_
+        top_idx = np.argsort(importances)[-3:][::-1]
+        top_factors = [
+            {
+                "name": FEATURE_COLS[i],
+                "value": round(float(vec[0][i]), 4),
+                "importance": round(float(importances[i]), 4),
+            }
+            for i in top_idx
         ]
 
-    def build_features(self, location: str, time_window: int) -> FeatureFrame:
-        return FeatureFrame(
-            features=get_stub_features(location),
-            location_id=location,
-            time_window_hours=time_window,
-        )
-
-    def train(self, config: TrainingConfig) -> ModelArtifact:
-        raise NotImplementedError(
-            "Run ml/training/train_baseline.py to train the model offline."
-        )
-
-    def infer(self, request: RiskRequest) -> RiskAssessment:
-        district_id = _nearest_district(request.lat, request.lon)
-        return self.infer_by_district_id(district_id)
-
-    def explain(self, assessment: RiskAssessment) -> RiskExplanation:
-        actions = {
-            "Low": ["Monitor local advisories", "Keep emergency kit ready"],
-            "Moderate": ["Prepare evacuation plan", "Monitor river levels", "Contact local PDMA"],
-            "High": ["Evacuate low-lying areas", "Follow NDMA instructions", "Avoid river banks"],
-            "Severe": ["Immediate evacuation required", "Call emergency services (1122)", "Seek high ground"],
+        return {
+            "flood_probability": round(prob, 4),
+            "risk_level": risk_level,
+            "confidence": confidence,
+            "top_factors": top_factors,
+            "model_version": MODEL_VERSION,
+            "disclaimer": DISCLAIMER,
         }
-        return RiskExplanation(
-            risk_level=assessment.risk_level,
-            main_causes=assessment.top_factors,
-            historical_evidence=[],
-            suggested_actions=actions.get(assessment.risk_level, []),
-            confidence=assessment.confidence,
-            data_sources=list(assessment.source_status.keys()),
-            disclaimer=DISCLAIMER,
-        )
 
-    # ── Public helper ─────────────────────────────────────────────────────────
-
-    def infer_by_district_id(
-        self,
-        district_id: str,
-        features: dict[str, float] | None = None,
-    ) -> RiskAssessment:
-        """Run inference for a specific district.
-
-        v3 contract: when ``settings.MODEL_MODE == "real_prediction"`` this
-        method MUST go through ``infer_v3()``. If the calibrated artifact is
-        missing it raises ``ModelArtifactMissingError`` — the API exception
-        handler converts that to HTTP 503. The legacy ``_rule_infer`` and
-        ``_ml_infer`` paths are not called in real_prediction mode.
-        """
-        from app.core.config import settings  # local import to avoid cycles
-        if settings.MODEL_MODE == "real_prediction":
-            return self.infer_v3(district_id)
-
-        bundle = self._get_bundle()
-        effective_features = features if features is not None else get_stub_features(district_id)
-        if bundle is not None:
-            return self._ml_infer(district_id, effective_features, bundle)
-        return self._rule_infer(district_id, effective_features)
-
-    def infer_v3(self, district_id: str) -> RiskAssessment:
-        """v3 inference path — calibrated ``predict_proba`` only, no fallback.
-
-        - Loads ``flood_prediction_calibrated_v3.pkl`` lazily and validates
-          metadata (``is_prediction_model=True``, ``feature_list``, etc.).
-        - Reads the latest feature row for the district from the v3
-          ``FeatureVectorProvider`` and rejects any leakage column.
-        - Returns ``risk_score = model.predict_proba(X)[0, 1]``.
-        - ``confidence = 2 * |p - 0.5|``; ``risk_level`` via v3 thresholds.
-        """
-        from app.hazards.flood.v3_guard import ensure_v3_ready, ModelArtifactMissingError
-        from app.hazards.flood.v3_features import latest_features_for, _FEATURE_CSV
-
-        state = ensure_v3_ready()  # raises ModelArtifactMissingError if not ready
-        bundle = self._get_v3_bundle(state)
-
-        if not _FEATURE_CSV.exists():
-            raise ModelArtifactMissingError(
-                reason=(
-                    "Real feature vector unavailable — run "
-                    "build_prediction_dataset.py to produce "
-                    "data/real/training/pakistan_flood_prediction_v3.csv."
-                ),
-                required_artifact=str(_FEATURE_CSV),
-                metadata_path=state.metadata_path,
-            )
-
-        feature_list: list[str] = bundle["metadata"]["feature_list"]
-        features = latest_features_for(district_id, feature_list)
-
-        # Defensive leakage guard — even though latest_features_for() strips
-        # them, refuse to proceed if any leakage column slipped through.
-        leaked = [c for c in features if c in V3_LEAKAGE_COLUMNS]
-        if leaked:
-            raise ValueError(f"Leakage columns reached the model input: {leaked}")
-
-        import numpy as np
-        X = np.array([[features[c] for c in feature_list]], dtype=np.float64)
-        probability = float(bundle["model"].predict_proba(X)[0, 1])
-
-        return RiskAssessment(
-            risk_score=round(probability, 4),
-            risk_level=v3_risk_level(probability),
-            confidence=round(v3_confidence_from_probability(probability), 4),
-            top_factors=bundle["metadata"].get("feature_list", [])[:3],
-            model_version=bundle["metadata"].get("model_name", "flood_prediction_v3"),
-            source_status={s.source_id: "real_prediction" for s in self.get_required_sources()},
-        )
-
-    def _get_v3_bundle(self, state) -> dict:
-        """Lazy-load the calibrated v3 artifact + cached metadata."""
-        if not hasattr(self, "_v3_bundle"):
-            import joblib
-            from pathlib import Path
-            artifact = joblib.load(Path(__file__).resolve().parents[4] / state.artifact_path)
-            self._v3_bundle = {
-                "model": artifact["model"] if isinstance(artifact, dict) else artifact,
-                "feature_list": (
-                    artifact.get("feature_list") if isinstance(artifact, dict)
-                    else state.metadata.get("feature_list", [])
-                ) or state.metadata.get("feature_list", []),
-                "metadata": state.metadata,
-            }
-        return self._v3_bundle
-
-    def model_version(self) -> str:
-        bundle = self._get_bundle()
-        return bundle.model_version if bundle else "rule-based-v0"
-
-    def top_features(self) -> list[str]:
-        bundle = self._get_bundle()
-        return bundle.top_features if bundle else ["distance_to_river_km", "elevation_mean_m", "historical_flood_count"]
-
-    # ── Private ───────────────────────────────────────────────────────────────
-
-    def _get_bundle(self) -> _ModelBundle | None:
-        if not self._bundle_loaded:
-            self._bundle = _load_bundle()
-            self._bundle_loaded = True
-        return self._bundle
-
-    def _ml_infer(
-        self, district_id: str, features: dict[str, float], bundle: _ModelBundle
-    ) -> RiskAssessment:
-        import numpy as np
-
-        vector = build_feature_vector(features)
-        X = np.array([vector], dtype=np.float32)
-        label_idx = int(bundle.model.predict(X)[0])
-        probas = bundle.model.predict_proba(X)[0]
-        confidence = round(float(probas[label_idx]), 3)
-        risk_level = bundle.label_to_level.get(label_idx, "Unknown")
-        risk_score = round(float(label_idx) / 3.0, 3)
-
-        return RiskAssessment(
-            risk_score=risk_score,
-            risk_level=risk_level,
-            confidence=confidence,
-            top_factors=bundle.top_features[:3],
-            model_version=bundle.model_version,
-            source_status={s.source_id: "stale" for s in self.get_required_sources()},
-        )
-
-    def _rule_infer(self, district_id: str, features: dict[str, float]) -> RiskAssessment:
-        score = _rule_based_score(features)
-        risk_level = classify_risk(score)
-        return RiskAssessment(
-            risk_score=round(score, 3),
-            risk_level=risk_level,
-            confidence=0.50,
-            top_factors=["distance_to_river_km", "elevation_mean_m", "historical_flood_count"],
-            model_version="rule-based-v0",
-            source_status={s.source_id: "stale" for s in self.get_required_sources()},
-        )
+    @property
+    def is_ready(self) -> bool:
+        self._load()
+        return self._model is not None
 
 
-# Module-level singleton — created lazily on first import use
-_strategy_instance: FloodPredictionStrategy | None = None
+_instance: FloodModel | None = None
 
 
-def get_flood_strategy() -> FloodPredictionStrategy:
-    global _strategy_instance
-    if _strategy_instance is None:
-        _strategy_instance = FloodPredictionStrategy()
-    return _strategy_instance
+def get_flood_model() -> FloodModel:
+    global _instance
+    if _instance is None:
+        _instance = FloodModel()
+    return _instance

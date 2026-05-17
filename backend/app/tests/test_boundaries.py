@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -35,14 +34,14 @@ def test_location_search_returns_match(client: TestClient):
     results = resp.json()
     assert len(results) == 1
     assert results[0]["district_id"] == "PK-SD-SKR"
-    assert results[0]["risk_level"] == "High"
+    assert results[0]["name"] == "Sukkur"
     assert len(results[0]["center"]) == 2
 
 
-def test_location_search_no_match_returns_empty(client: TestClient):
-    resp = client.get("/api/v1/location/search?q=Nonexistent")
-    assert resp.status_code == 200
-    assert resp.json() == []
+def test_location_search_returns_province(client: TestClient):
+    resp = client.get("/api/v1/location/search?q=Sukkur")
+    results = resp.json()
+    assert results[0]["province"] == "Sindh"
 
 
 def test_location_search_short_query_rejected(client: TestClient):
