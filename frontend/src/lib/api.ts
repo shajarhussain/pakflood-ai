@@ -1,4 +1,4 @@
-import type { PredictionResponse, ZonesGeoJSON } from "@/lib/types";
+import type { PredictionResponse, ZonesGeoJSON, DistrictSearchResult } from "@/lib/types";
 
 const API_BASE =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL) ||
@@ -39,5 +39,19 @@ export async function fetchZonesGeoJSON(): Promise<ZonesGeoJSON | null> {
     return res.json() as Promise<ZonesGeoJSON>;
   } catch {
     return null;
+  }
+}
+
+export async function searchDistricts(q: string): Promise<DistrictSearchResult[]> {
+  if (q.trim().length < 2) return [];
+  try {
+    const res = await fetch(
+      `${API_BASE}/districts/search?q=${encodeURIComponent(q.trim())}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    return res.json() as Promise<DistrictSearchResult[]>;
+  } catch {
+    return [];
   }
 }

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import type { PredictionResponse, ZonesGeoJSON } from "@/lib/types";
 import { predictFloodRisk, fetchModelStatus, fetchZonesGeoJSON, type ModelStatus } from "@/lib/api";
 import PredictionCard from "@/components/PredictionCard";
+import SearchBar from "@/components/SearchBar";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), { ssr: false });
 
@@ -96,6 +97,9 @@ export default function FloodApp() {
         zones={zones}
         showZones={showZones}
       />
+
+      {/* Search bar */}
+      <SearchBar onSelect={(lat, lng, name) => { void name; runPrediction(lat, lng); }} />
 
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-slate-950/80 backdrop-blur-sm border-b border-white/10">

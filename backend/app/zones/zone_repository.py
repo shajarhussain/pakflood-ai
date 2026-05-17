@@ -34,11 +34,16 @@ class ZoneRepository:
     # ── Read helpers ──────────────────────────────────────────────────────────
 
     def get_latest_batch(self) -> Optional[dict]:
-        """Return the most recent complete batch row, or None."""
+        """Return the most recent complete grid batch row, or None.
+
+        Filters out single-point prediction batches (total_points == 1) created
+        by the prediction controller — those must not shadow the full grid batch.
+        """
         result = (
             self._db.table("zone_batches")
             .select("*")
             .eq("status", "complete")
+            .gt("total_points", 1)
             .order("started_at", desc=True)
             .limit(1)
             .execute()

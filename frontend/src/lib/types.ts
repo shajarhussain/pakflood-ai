@@ -56,3 +56,22 @@ export interface ZonesGeoJSON {
     message?: string;
   };
 }
+
+// ── District search ───────────────────────────────────────────────────────────
+
+export interface DistrictSummary {
+  total_points: number;
+  avg_flood_prob: number | null;
+  max_flood_prob: number | null;
+  dominant_risk: RiskLevel | null;
+  risk_breakdown: Record<string, number>;
+  computed_at: string | null;
+}
+
+export interface DistrictSearchResult {
+  district_id: string;
+  name: string;
+  province: string;
+  center: { lat: number; lng: number };
+  summary: DistrictSummary | null;
+}
