@@ -6,10 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.logging import configure_logging
 from app.hazards.flood.model import get_flood_model
 from app.routes.router import router
 from app.zones.zone_scheduler import start_zone_scheduler, stop_zone_scheduler
 
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
