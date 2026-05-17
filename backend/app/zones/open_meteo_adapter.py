@@ -31,6 +31,14 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Sentinel returned (not raised) when all 429 retries are exhausted.
+# Callers should treat this as a signal to add a longer cooldown before
+# the next request, rather than just skipping the point silently.
+class _RateLimited:
+    pass
+
+RATE_LIMITED: _RateLimited = _RateLimited()
+
 _OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
 _DAILY_VARS = ",".join([
@@ -125,7 +133,7 @@ async def fetch_weather_features(
                     await asyncio.sleep(wait)
                     continue
                 logger.warning("429 retries exhausted lat=%.4f lng=%.4f", lat, lng)
-                return None
+                return RATE_LIMITED
 
             if resp.status_code in (502, 503, 504):
                 if attempt < max_retries:

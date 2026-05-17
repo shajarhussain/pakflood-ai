@@ -32,6 +32,19 @@ _scheduler    = AsyncIOScheduler()
 _is_computing = False
 
 
+async def _startup_zone_job(model) -> None:
+    """
+    Startup-only wrapper: skip if the DB already has fresh data.
+    This prevents hammering Open-Meteo when the server restarts mid-window.
+    """
+    repo = ZoneRepository()
+    fresh = await asyncio.to_thread(repo.is_cache_fresh)
+    if fresh:
+        logger.info("Zone cache is fresh — skipping startup computation")
+        return
+    await _zone_job(model)
+
+
 async def _zone_job(model) -> None:
     """Compute zones and persist to Supabase. Skipped if already running."""
     global _is_computing
@@ -72,11 +85,11 @@ def start_zone_scheduler(model) -> None:
     now       = datetime.now(timezone.utc)
     first_run = now + timedelta(seconds=delay_sec)
 
-    # Immediate one-shot: fires ~5s after startup so the server is ready.
-    # This guarantees zones are computed on every (re)start regardless of
-    # how quickly files change during development.
+    # Immediate one-shot: fires ~5s after startup.
+    # Uses _startup_zone_job which skips if DB data is already fresh,
+    # preventing Open-Meteo rate-limit hammering on repeated dev restarts.
     _scheduler.add_job(
-        _zone_job,
+        _startup_zone_job,
         trigger=DateTrigger(run_date=now + timedelta(seconds=5)),
         args=[model],
         id="zone_immediate",
@@ -84,10 +97,11 @@ def start_zone_scheduler(model) -> None:
         misfire_grace_time=300,
     )
 
-    # Hourly recurring job — keeps data fresh after the first run.
+    # Recurring job every 3 hours — ~952 points × 8 runs/day = 7,616 req/day
+    # (safely under Open-Meteo free tier 10,000/day limit at 0.5° grid).
     _scheduler.add_job(
         _zone_job,
-        trigger=IntervalTrigger(minutes=60, start_date=first_run),
+        trigger=IntervalTrigger(hours=3, start_date=first_run),
         args=[model],
         id="zone_hourly",
         replace_existing=True,
@@ -96,7 +110,7 @@ def start_zone_scheduler(model) -> None:
 
     _scheduler.start()
     logger.info(
-        "Zone scheduler started — immediate run in 5s, then every 60 min"
+        "Zone scheduler started — immediate run in 5s, then every 3h"
     )
 
 
