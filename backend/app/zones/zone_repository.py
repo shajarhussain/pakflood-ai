@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_ROWS   = 10_000   # well above the ~3 685 grid points
 _CHUNK_SIZE = 200      # rows per bulk-insert call (Supabase limit is ~1 MB/call)
+_MIN_POINTS_FRACTION = 0.5  # reject a batch if fewer than 50% of grid points succeeded
 
 
 class ZoneRepository:
@@ -128,20 +129,60 @@ class ZoneRepository:
         now = datetime.now(timezone.utc)
         return (now - completed_at).total_seconds() / 60.0
 
+    def get_nearest_zone_point(
+        self,
+        lat: float,
+        lng: float,
+        radius_deg: float = 1.5,
+    ) -> Optional[dict]:
+        """
+        Return the cached zone point closest to (lat, lng).
+
+        Queries a bounding box of ±radius_deg, then picks the minimum
+        Euclidean distance. Returns None if no cached data exists.
+        """
+        points = self.get_zone_points_in_bbox(
+            lat - radius_deg, lat + radius_deg,
+            lng - radius_deg, lng + radius_deg,
+        )
+        if not points:
+            return None
+        return min(
+            points,
+            key=lambda p: (p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2,
+        )
+
     # ── Write helpers ─────────────────────────────────────────────────────────
 
     def save_zone_batch(self, points: list[dict]) -> str:
         """
         Persist a full zone computation run.
 
+        Rejects the batch if fewer than 50% of the expected grid points
+        succeeded — this prevents partial runs (e.g. a single stray point
+        from old code paths) from overwriting a healthy cache.
+
         Steps:
-          1. Insert zone_batches row with status='running'
-          2. Bulk-insert all zone_grid_points in chunks of _CHUNK_SIZE
-          3. Mark the batch status='complete'
-          4. Delete all previous complete batches (and their grid points)
+          1. Validate point count against expected grid size
+          2. Insert zone_batches row with status='running'
+          3. Bulk-insert all zone_grid_points in chunks of _CHUNK_SIZE
+          4. Mark the batch status='complete'
+          5. Delete all previous complete batches (and their grid points)
 
         Returns the new batch_id (UUID string).
+        Raises ValueError if the point count is below the minimum threshold.
         """
+        from app.zones.grid_generator import generate_pakistan_grid
+        expected = len(generate_pakistan_grid())
+        minimum  = int(expected * _MIN_POINTS_FRACTION)
+
+        if len(points) < minimum:
+            raise ValueError(
+                f"Batch rejected: only {len(points)} points computed, "
+                f"need at least {minimum} ({_MIN_POINTS_FRACTION:.0%} of {expected} expected). "
+                f"DB not updated — previous cache preserved."
+            )
+
         batch_id = str(uuid.uuid4())
         now_iso  = datetime.now(timezone.utc).isoformat()
 
