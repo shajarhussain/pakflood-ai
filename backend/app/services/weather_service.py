@@ -25,7 +25,7 @@ async def fetch_weather_features(lat: float, lng: float) -> dict[str, float]:
     async with httpx.AsyncClient(timeout=15.0) as client:
         features = await _fetch(lat, lng, client)
 
-    if features is None:
+    if not isinstance(features, dict):
         raise HTTPException(
             status_code=503,
             detail="Weather API unavailable — could not fetch Open-Meteo data.",

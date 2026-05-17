@@ -1,45 +1,58 @@
 export type RiskLevel = "Low" | "Moderate" | "High" | "Severe";
 
-export interface District {
-  id: string;
+export interface TopFactor {
   name: string;
-  province: string;
-  geometry: GeoJSON.Geometry;
+  value: number;
+  importance: number;
 }
 
-export interface RiskSnapshot {
-  district_id: string;
-  risk_score: number;
-  risk_level: RiskLevel;
+export interface PredictionResponse {
+  latitude: number;
+  longitude: number;
+  flood_probability: number;
+  risk_level: RiskLevel | "Unknown";
   confidence: number;
-  top_factors: string[];
-  source_status: Record<string, "fresh" | "stale" | "error">;
+  top_factors: TopFactor[];
+  weather_features: Record<string, number>;
   model_version: string;
-  updated_at: string;
-}
-
-export interface RiskExplanation {
-  risk_level: RiskLevel;
-  main_causes: string[];
-  historical_evidence: string[];
-  suggested_actions: string[];
-  confidence: number;
-  data_sources: string[];
+  saved_to_db: boolean;
   disclaimer: string;
 }
 
-export interface FloodEvent {
-  id: string;
-  year: number;
-  title: string;
-  affected_districts: string[];
-  description: string;
+// ── Zone heatmap ─────────────────────────────────────────────────────────────
+
+export interface ZoneFeatureProperties {
+  flood_prob: number;
+  risk_level: RiskLevel | "Unknown";
+  risk_score: number;
+  confidence: number;
+  top_factors: TopFactor[];
+  computed_at: string;
+  precipitation?: number;
+  temperature?: number;
+  humidity?: number;
+  wind_speed?: number;
+  soil_moisture?: number;
+  is_monsoon?: number;
 }
 
-export interface DataSource {
-  source_id: string;
-  name: string;
-  status: "fresh" | "stale" | "error";
-  last_updated: string | null;
-  adapter_class: string;
+export interface ZoneFeature {
+  type: "Feature";
+  geometry: {
+    type: "Point";
+    coordinates: [number, number]; // [lng, lat] — GeoJSON order
+  };
+  properties: ZoneFeatureProperties;
+}
+
+export interface ZonesGeoJSON {
+  type: "FeatureCollection";
+  features: ZoneFeature[];
+  metadata: {
+    computed_at: string | null;
+    is_fresh: boolean;
+    total_points: number;
+    grid_step_degrees: number;
+    message?: string;
+  };
 }
