@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.hazards.flood.features import FEATURE_COLS
 from app.hazards.flood.rules import classify_risk
 from app.zones.open_meteo_adapter import RATE_LIMITED, fetch_weather_features, features_to_vector
+from app.zones.boundary_filter import filter_grid_to_pakistan, clear_boundary_cache
 
 logger = logging.getLogger(__name__)
 
@@ -155,8 +156,11 @@ async def compute_all_zones(model) -> list[dict]:
     """
     xgb = getattr(model, "_model", model)
 
-    grid          = generate_pakistan_grid()
-    total         = len(grid)
+    # Reload boundary from DB each run (clears cache so yearly refresh is picked up)
+    clear_boundary_cache()
+    raw_grid = generate_pakistan_grid()
+    grid     = filter_grid_to_pakistan(raw_grid)
+    total    = len(grid)
     base_delay    = settings.OPEN_METEO_REQUEST_DELAY_SEC
     current_delay = base_delay
     rate_cooldown = 180.0   # pause (s) after 429 exhaustion before next request
