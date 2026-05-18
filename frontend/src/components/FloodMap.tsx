@@ -74,6 +74,57 @@ const ZONE_COLORS: Record<string, string> = {
   Unknown:  "#475569",
 };
 
+// ── District risk aggregation ────────────────────────────────────────────────
+// Spatially joins zone points to district polygons (ray-casting) and returns
+// the dominant (highest-priority) risk per district.
+
+const _RISK_PRIORITY: Record<string, number> = { Severe: 4, High: 3, Moderate: 2, Low: 1 };
+
+interface DistrictRiskData { risk: string; maxProb: number; count: number }
+
+function computeDistrictRisk(
+  zones: ZonesGeoJSON,
+  boundaries: FeatureCollection
+): Map<string, DistrictRiskData> {
+  const result = new Map<string, DistrictRiskData>();
+
+  for (const f of zones.features) {
+    const [lng, lat] = f.geometry.coordinates;
+    const { risk_level, flood_prob } = f.properties;
+    const prob = flood_prob ?? 0;
+
+    for (const boundary of boundaries.features) {
+      if (!boundary.geometry) continue;
+      const name = boundary.properties?.name as string | undefined;
+      if (!name) continue;
+      const geom = boundary.geometry as Polygon | MultiPolygon;
+
+      let inside = false;
+      if (geom.type === "Polygon") {
+        inside = _pointInRing(lat, lng, (geom.coordinates[0] as unknown) as number[][] | undefined);
+      } else if (geom.type === "MultiPolygon") {
+        for (const poly of (geom.coordinates as unknown) as number[][][][] | undefined ?? []) {
+          if (_pointInRing(lat, lng, poly?.[0])) { inside = true; break; }
+        }
+      }
+
+      if (inside) {
+        const cur = result.get(name);
+        if (!cur) {
+          result.set(name, { risk: risk_level, maxProb: prob, count: 1 });
+        } else {
+          if ((_RISK_PRIORITY[risk_level] ?? 0) > (_RISK_PRIORITY[cur.risk] ?? 0)) cur.risk = risk_level;
+          if (prob > cur.maxProb) cur.maxProb = prob;
+          cur.count++;
+        }
+        break; // a point belongs to exactly one district
+      }
+    }
+  }
+
+  return result;
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -81,16 +132,19 @@ interface Props {
   onLocationSelect: (lat: number, lng: number) => void;
   zones?: ZonesGeoJSON | null;
   showZones?: boolean;
+  showZonePolygons?: boolean;
+  riskFilter?: string | null;
   selectedEvent?: FloodEvent | null;
 }
 
-export default function FloodMap({ selectedLocation, onLocationSelect, zones, showZones, selectedEvent }: Props) {
-  const containerRef    = useRef<HTMLDivElement>(null);
-  const mapRef          = useRef<LeafletMap | null>(null);
-  const markerRef       = useRef<Marker | null>(null);
-  const zonesGroupRef   = useRef<LayerGroup | null>(null);
-  const eventLayerRef   = useRef<LayerGroup | null>(null);
-  const boundariesRef   = useRef<FeatureCollection | null>(null);
+export default function FloodMap({ selectedLocation, onLocationSelect, zones, showZones, showZonePolygons, riskFilter, selectedEvent }: Props) {
+  const containerRef        = useRef<HTMLDivElement>(null);
+  const mapRef              = useRef<LeafletMap | null>(null);
+  const markerRef           = useRef<Marker | null>(null);
+  const zonesGroupRef       = useRef<LayerGroup | null>(null);
+  const zonePolygonsGroupRef = useRef<LayerGroup | null>(null);
+  const eventLayerRef       = useRef<LayerGroup | null>(null);
+  const boundariesRef       = useRef<FeatureCollection | null>(null);
   const [mapReady,        setMapReady       ] = useState(false);
   const [boundariesReady, setBoundariesReady] = useState(false);
 
@@ -161,6 +215,7 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
       mapRef.current?.remove();
       mapRef.current = null;
       zonesGroupRef.current = null;
+      zonePolygonsGroupRef.current = null;
       eventLayerRef.current = null;
       boundariesRef.current = null;
     };
@@ -190,15 +245,21 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
         if (!isInsidePakistan(lat, lng, boundaries)) continue;
 
         const { flood_prob, risk_level, confidence, top_factors } = feature.properties;
-        const color   = ZONE_COLORS[risk_level] ?? "#475569";
-        const opacity = Math.max(0.18, (flood_prob ?? 0) * 0.88);
-        const pct     = Math.round((flood_prob  ?? 0) * 100);
-        const confPct = Math.round((confidence  ?? 0) * 100);
-        const topName = top_factors?.[0]?.name ?? "—";
+        const color      = ZONE_COLORS[risk_level] ?? "#475569";
+        const dimmed     = !!riskFilter && risk_level !== riskFilter;
+        const opacity    = dimmed ? 0.05 : Math.max(0.25, (flood_prob ?? 0) * 0.92);
+        const radius     = dimmed ? 9 : (riskFilter ? 17 : 14);
+        const pct        = Math.round((flood_prob  ?? 0) * 100);
+        const confPct    = Math.round((confidence  ?? 0) * 100);
+        const topName    = top_factors?.[0]?.name ?? "—";
 
         L.circleMarker([lat, lng], {
-          radius: 14, color: "transparent",
-          fillColor: color, fillOpacity: opacity, weight: 0, interactive: true,
+          radius,
+          color:       !dimmed && riskFilter ? color : "transparent",
+          weight:      !dimmed && riskFilter ? 1.5   : 0,
+          fillColor:   color,
+          fillOpacity: opacity,
+          interactive: !dimmed,
         })
           .on("click", (e) => { (e.originalEvent as Event).stopPropagation(); })
           .bindPopup(
@@ -214,7 +275,64 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
       }
     })();
     // boundariesReady is a dep so zones re-render once boundaries finish loading
-  }, [zones, showZones, mapReady, boundariesReady]);
+  }, [zones, showZones, riskFilter, mapReady, boundariesReady]);
+
+  // ── Zone choropleth — district polygons coloured by dominant risk ─────────
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+
+    (async () => {
+      const L = (await import("leaflet")).default;
+
+      if (zonePolygonsGroupRef.current) zonePolygonsGroupRef.current.clearLayers();
+      if (!showZonePolygons || !zones?.features?.length || !boundariesRef.current) return;
+
+      if (!zonePolygonsGroupRef.current) {
+        zonePolygonsGroupRef.current = L.layerGroup().addTo(mapRef.current!);
+      }
+
+      const districtRisk = computeDistrictRisk(zones, boundariesRef.current);
+
+      for (const boundary of boundariesRef.current.features) {
+        if (!boundary.geometry) continue;
+        const name     = boundary.properties?.name     as string | undefined;
+        const province = boundary.properties?.province as string | undefined;
+        if (!name) continue;
+
+        const data   = districtRisk.get(name);
+        const risk   = data?.risk   ?? "Unknown";
+        const color  = ZONE_COLORS[risk] ?? ZONE_COLORS["Unknown"];
+        const dimmed = !!riskFilter && risk !== riskFilter;
+        const pct    = data ? Math.round(data.maxProb * 100) : null;
+
+        L.geoJSON(boundary as never, {
+          style: () => ({
+            color:       dimmed ? "#334155" : color,
+            weight:      dimmed ? 0.5 : 2,
+            fillColor:   color,
+            fillOpacity: dimmed ? 0.04 : (data ? 0.35 : 0.07),
+            opacity:     dimmed ? 0.3  : 0.9,
+          }),
+          interactive: !!data && !dimmed,
+        })
+          .bindPopup(
+            data
+              ? `<div style="font-family:system-ui,sans-serif;font-size:12px;min-width:170px">
+                  <div style="font-weight:700;font-size:14px;color:#e2e8f0;margin-bottom:1px">${name}</div>
+                  <div style="color:#64748b;font-size:11px;margin-bottom:8px">${province ?? ""}</div>
+                  <div style="font-weight:700;color:${color};font-size:13px;margin-bottom:5px">${risk} Risk</div>
+                  <div style="color:#94a3b8;margin-bottom:2px">Max flood prob: <b style="color:#e2e8f0">${pct}%</b></div>
+                  <div style="color:#94a3b8">Zone points: <b style="color:#e2e8f0">${data.count}</b></div>
+                </div>`
+              : `<div style="font-family:system-ui,sans-serif;font-size:12px">
+                  <b style="color:#e2e8f0">${name}</b>
+                  <div style="color:#475569;font-size:11px;margin-top:3px">No zone data</div>
+                </div>`
+          )
+          .addTo(zonePolygonsGroupRef.current!);
+      }
+    })();
+  }, [zones, showZonePolygons, riskFilter, mapReady, boundariesReady]);
 
   // ── Historical event district highlight ──────────────────────────────────
   useEffect(() => {
