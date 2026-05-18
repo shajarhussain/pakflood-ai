@@ -43,6 +43,16 @@ export async function fetchZonesGeoJSON(): Promise<ZonesGeoJSON | null> {
   }
 }
 
+export async function fetchBoundaries(): Promise<object | null> {
+  try {
+    const res = await fetch(`${API_BASE}/admin-boundaries`, { cache: "force-cache" });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchFloodEvents(): Promise<FloodEvent[]> {
   try {
     const res = await fetch(`${API_BASE}/flood-events`, { cache: "no-store" });
