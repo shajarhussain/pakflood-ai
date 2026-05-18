@@ -72,6 +72,8 @@ async def run_prediction(lat: float, lng: float) -> PredictionResponse:
     return PredictionResponse(
         latitude=lat,
         longitude=lng,
+        nearest_grid_lat=float(point["lat"]),
+        nearest_grid_lng=float(point["lng"]),
         flood_probability=float(point["flood_prob"]),
         risk_level=point["risk_level"],
         confidence=float(point["confidence"]),

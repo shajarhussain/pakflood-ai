@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 _MAX_ROWS   = 10_000   # well above the ~3 685 grid points
 _CHUNK_SIZE = 200      # rows per bulk-insert call (Supabase limit is ~1 MB/call)
 _MIN_POINTS_FRACTION = 0.5  # reject a batch if fewer than 50% of grid points succeeded
+_MIN_USEFUL_POINTS   = 100  # a batch with fewer points is not considered "fresh"
 
 
 class ZoneRepository:
@@ -35,16 +36,15 @@ class ZoneRepository:
     # ── Read helpers ──────────────────────────────────────────────────────────
 
     def get_latest_batch(self) -> Optional[dict]:
-        """Return the most recent complete grid batch row, or None.
-
-        Filters out single-point prediction batches (total_points == 1) created
-        by the prediction controller — those must not shadow the full grid batch.
+        """
+        Return the most recent complete batch that has enough points to be useful.
+        Skips stray 1-point batches left over from old code paths.
         """
         result = (
             self._db.table("zone_batches")
             .select("*")
             .eq("status", "complete")
-            .gt("total_points", 1)
+            .gte("total_points", _MIN_USEFUL_POINTS)
             .order("started_at", desc=True)
             .limit(1)
             .execute()
@@ -111,7 +111,12 @@ class ZoneRepository:
         return rows
 
     def is_cache_fresh(self) -> bool:
-        """True if the latest complete batch is younger than ZONE_CACHE_TTL_MINUTES."""
+        """True if the latest complete batch is young enough AND has enough points."""
+        batch = self.get_latest_batch()
+        if batch is None:
+            return False
+        if batch.get("total_points", 0) < _MIN_USEFUL_POINTS:
+            return False
         minutes = self.get_minutes_since_last_computation()
         if minutes is None:
             return False
@@ -143,19 +148,62 @@ class ZoneRepository:
         """
         Return the cached zone point closest to (lat, lng).
 
-        Queries a bounding box of ±radius_deg, then picks the minimum
-        Euclidean distance. Returns None if no cached data exists.
+        Strategy (most specific to least):
+          1. Latest healthy batch (>= _MIN_USEFUL_POINTS), tight bbox
+          2. All zone_grid_points (no batch filter), tight bbox
+          3. All zone_grid_points (no batch filter), full Pakistan bbox — last resort
         """
-        points = self.get_zone_points_in_bbox(
-            lat - radius_deg, lat + radius_deg,
-            lng - radius_deg, lng + radius_deg,
+        batch = self.get_latest_batch()
+
+        # Try 1: latest healthy batch, tight bbox
+        if batch:
+            points = self.get_zone_points_in_bbox(
+                lat - radius_deg, lat + radius_deg,
+                lng - radius_deg, lng + radius_deg,
+            )
+            if points:
+                return min(points, key=lambda p: (p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2)
+
+        # Try 2: all stored points, tight bbox (no batch filter)
+        result = (
+            self._db.table("zone_grid_points")
+            .select("*")
+            .gte("lat", lat - radius_deg)
+            .lte("lat", lat + radius_deg)
+            .gte("lng", lng - radius_deg)
+            .lte("lng", lng + radius_deg)
+            .neq("risk_level", "Unknown")
+            .limit(_MAX_ROWS)
+            .execute()
         )
-        if not points:
-            return None
-        return min(
-            points,
-            key=lambda p: (p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2,
+        points = result.data or []
+        if points:
+            return min(points, key=lambda p: (p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2)
+
+        # Try 3: all stored points, full Pakistan bbox — any valid point is better than 503
+        result = (
+            self._db.table("zone_grid_points")
+            .select("*")
+            .gte("lat", 23.5)
+            .lte("lat", 37.0)
+            .gte("lng", 60.5)
+            .lte("lng", 77.0)
+            .neq("risk_level", "Unknown")
+            .limit(_MAX_ROWS)
+            .execute()
         )
+        points = result.data or []
+        if points:
+            logger.warning(
+                "get_nearest_zone_point: no points near (%.2f, %.2f) — "
+                "returning nearest from full Pakistan grid (%.2f° away). "
+                "Zone computation may be incomplete.",
+                lat, lng,
+                min((p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2 for p in points) ** 0.5,
+            )
+            return min(points, key=lambda p: (p["lat"] - lat) ** 2 + (p["lng"] - lng) ** 2)
+
+        return None
 
     # ── Write helpers ─────────────────────────────────────────────────────────
 
