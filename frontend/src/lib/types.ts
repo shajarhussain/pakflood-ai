@@ -57,6 +57,20 @@ export interface ZonesGeoJSON {
   };
 }
 
+// ── Flood events ─────────────────────────────────────────────────────────────
+
+export interface FloodEvent {
+  id: string;
+  year: number;
+  title: string;
+  affected_provinces: string[];
+  affected_districts: string[];
+  peak_month: string;
+  estimated_affected: number | null;
+  damage_usd_billion: number | null;
+  description: string;
+}
+
 // ── District search ───────────────────────────────────────────────────────────
 
 export interface DistrictSummary {

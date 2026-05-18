@@ -1,4 +1,5 @@
-import type { PredictionResponse, ZonesGeoJSON, DistrictSearchResult } from "@/lib/types";
+import type { PredictionResponse, ZonesGeoJSON, DistrictSearchResult, FloodEvent } from "@/lib/types";
+export type { FloodEvent };
 
 const API_BASE =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL) ||
@@ -39,6 +40,16 @@ export async function fetchZonesGeoJSON(): Promise<ZonesGeoJSON | null> {
     return res.json() as Promise<ZonesGeoJSON>;
   } catch {
     return null;
+  }
+}
+
+export async function fetchFloodEvents(): Promise<FloodEvent[]> {
+  try {
+    const res = await fetch(`${API_BASE}/flood-events`, { cache: "no-store" });
+    if (!res.ok) return [];
+    return res.json() as Promise<FloodEvent[]>;
+  } catch {
+    return [];
   }
 }
 
