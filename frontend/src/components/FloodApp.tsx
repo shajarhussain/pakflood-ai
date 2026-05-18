@@ -34,6 +34,7 @@ export default function FloodApp() {
   const [events,        setEvents       ] = useState<FloodEvent[]>([]);
   const [showEvents,    setShowEvents   ] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<FloodEvent | null>(null);
 
   useEffect(() => { fetchModelStatus().then(setModelStatus); }, []);
 
@@ -98,10 +99,11 @@ export default function FloodApp() {
         onLocationSelect={runPrediction}
         zones={zones}
         showZones={showZones}
+        selectedEvent={selectedEvent}
       />
 
-      {/* Search bar — floats below top bar, left side */}
-      <SearchBar onSelect={(lat, lng) => runPrediction(lat, lng)} />
+      {/* Search bar — hidden when events panel is open to avoid overlap */}
+      {!showEvents && <SearchBar onSelect={(lat, lng) => runPrediction(lat, lng)} />}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-slate-950/80 backdrop-blur-sm border-b border-white/10">
@@ -202,8 +204,8 @@ export default function FloodApp() {
       )}
 
       {/* Heatmap legend */}
-      {showZones && !zonesLoading && !showEvents && (
-        <div className="absolute bottom-8 left-4 z-[1000]">
+      {showZones && !zonesLoading && (
+        <div className={`absolute bottom-8 z-[1000] ${showEvents ? "left-[292px]" : "left-4"}`}>
           <div className="px-3 py-2.5 rounded-xl bg-slate-900/90 border border-white/10 backdrop-blur-sm">
             <p className="text-slate-500 text-[10px] uppercase tracking-wider mb-2">
               Risk Heatmap
@@ -265,7 +267,12 @@ export default function FloodApp() {
 
       {/* Historical flood events panel */}
       {showEvents && (
-        <FloodEventsPanel events={events} onClose={() => setShowEvents(false)} />
+        <FloodEventsPanel
+          events={events}
+          onClose={() => { setShowEvents(false); setSelectedEvent(null); }}
+          selectedEventId={selectedEvent?.id ?? null}
+          onEventSelect={setSelectedEvent}
+        />
       )}
     </div>
   );
