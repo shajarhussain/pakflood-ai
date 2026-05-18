@@ -10,7 +10,7 @@ import {
   MAP_MIN_ZOOM,
   MAP_MAX_ZOOM,
 } from "@/data/pakistan-bounds";
-import type { ZonesGeoJSON, FloodEvent } from "@/lib/types";
+import type { ZonesGeoJSON, FloodEvent, RiverStation } from "@/lib/types";
 import { fetchBoundaries } from "@/lib/api";
 
 // ── Point-in-Pakistan check (ray-casting) ────────────────────────────────────
@@ -127,6 +127,37 @@ function computeDistrictRisk(
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
+// ── River flow animation speeds ───────────────────────────────────────────────
+
+// Rivers are always blue — only speed varies with discharge
+const RIVER_COLOR = "#38bdf8";
+
+function _riverStyle(discharge: number): { duration: number; weight: number } {
+  if (discharge > 400_000) return { duration: 6,  weight: 4 };
+  if (discharge > 150_000) return { duration: 10, weight: 3.5 };
+  if (discharge >  50_000) return { duration: 16, weight: 3 };
+  return                          { duration: 22, weight: 2.5 };
+}
+
+// Rivers that flow eastward; all others flow predominantly southward
+const _EAST_FLOWING = new Set(["kabul", "kunar", "landay_sin"]);
+
+// Ensure coordinates run downstream. GeoJSON order is [lng, lat].
+// South-flowing: last lat should be < first lat.
+// East-flowing:  last lng should be > first lng.
+function _ensureDownstream(
+  coords: [number, number][],
+  riverId: string
+): [number, number][] {
+  if (coords.length < 2) return coords;
+  const [fLng, fLat] = coords[0];
+  const [lLng, lLat] = coords[coords.length - 1];
+  if (_EAST_FLOWING.has(riverId)) {
+    return lLng >= fLng ? coords : [...coords].reverse();
+  }
+  return lLat <= fLat ? coords : [...coords].reverse();
+}
+
 interface Props {
   selectedLocation: { lat: number; lng: number } | null;
   onLocationSelect: (lat: number, lng: number) => void;
@@ -135,15 +166,19 @@ interface Props {
   showZonePolygons?: boolean;
   riskFilter?: string | null;
   selectedEvent?: FloodEvent | null;
+  showRivers?: boolean;
+  riverStations?: RiverStation[];
 }
 
-export default function FloodMap({ selectedLocation, onLocationSelect, zones, showZones, showZonePolygons, riskFilter, selectedEvent }: Props) {
+export default function FloodMap({ selectedLocation, onLocationSelect, zones, showZones, showZonePolygons, riskFilter, selectedEvent, showRivers, riverStations }: Props) {
   const containerRef        = useRef<HTMLDivElement>(null);
   const mapRef              = useRef<LeafletMap | null>(null);
   const markerRef           = useRef<Marker | null>(null);
   const zonesGroupRef       = useRef<LayerGroup | null>(null);
   const zonePolygonsGroupRef = useRef<LayerGroup | null>(null);
   const eventLayerRef       = useRef<LayerGroup | null>(null);
+  const riverLayerRef       = useRef<LayerGroup | null>(null);
+  const riverParticlesRef   = useRef<SVGElement[]>([]);
   const boundariesRef       = useRef<FeatureCollection | null>(null);
   const [mapReady,        setMapReady       ] = useState(false);
   const [boundariesReady, setBoundariesReady] = useState(false);
@@ -212,11 +247,14 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
 
     return () => {
       destroyed = true;
+      riverParticlesRef.current.forEach((el) => el.parentNode?.removeChild(el));
+      riverParticlesRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
       zonesGroupRef.current = null;
       zonePolygonsGroupRef.current = null;
       eventLayerRef.current = null;
+      riverLayerRef.current = null;
       boundariesRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -379,6 +417,207 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
       }
     })();
   }, [selectedEvent, mapReady, boundariesReady]);
+
+  // ── River flow layer with particle animation ─────────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const L = (await import("leaflet")).default;
+      if (cancelled) return;
+
+      riverParticlesRef.current.forEach((el) => el.parentNode?.removeChild(el));
+      riverParticlesRef.current = [];
+
+      if (riverLayerRef.current) {
+        riverLayerRef.current.clearLayers();
+      } else {
+        riverLayerRef.current = L.layerGroup().addTo(mapRef.current!);
+      }
+
+      if (!showRivers) return;
+
+      // OSM Overpass GeoJSON: properties use name:en, geometry is MultiLineString
+      type OsmRiverProps = Record<string, string>;
+      type OsmGeometry =
+        | { type: "LineString";      coordinates: [number, number][]   }
+        | { type: "MultiLineString"; coordinates: [number, number][][] };
+      type OsmFeature = { type: "Feature"; properties: OsmRiverProps; geometry: OsmGeometry };
+      type RiverGeoJSON = { type: string; features: OsmFeature[] };
+
+      let geojson: RiverGeoJSON | null = null;
+      try {
+        const res = await fetch("/data/major_rivers.geojson");
+        if (res.ok) geojson = await res.json() as RiverGeoJSON;
+      } catch { /* skip */ }
+      if (!geojson || cancelled) return;
+
+      // Derive a stable river_id from the English name for station lookup
+      const nameToId = (name: string): string => {
+        const n = name.toLowerCase();
+        if (n.includes("indus"))   return "indus";
+        if (n.includes("jhelum"))  return "jhelum";
+        if (n.includes("chenab"))  return "chenab";
+        if (n.includes("ravi"))    return "ravi";
+        if (n.includes("sutlej"))  return "sutlej";
+        if (n.includes("kabul"))   return "kabul";
+        if (n.includes("swat"))    return "swat";
+        if (n.includes("hunza"))   return "hunza";
+        if (n.includes("neelum"))  return "neelum";
+        if (n.includes("gomal"))   return "gomal";
+        return n.replace(/\s+river$/, "").replace(/[^a-z0-9]+/g, "_");
+      };
+
+      // Build discharge map: river_id → max cusecs
+      const dischargeMap = new Map<string, number>();
+      for (const s of (riverStations ?? [])) {
+        const cur = dischargeMap.get(s.river_id) ?? 0;
+        if (s.discharge_cusecs > cur) dischargeMap.set(s.river_id, s.discharge_cusecs);
+      }
+
+      // Track which rivers have had particles attached (one set of particles per river)
+      const particlesAdded = new Set<string>();
+
+      const NS   = "http://www.w3.org/2000/svg";
+      const XLNS = "http://www.w3.org/1999/xlink";
+
+      for (const feature of geojson.features) {
+        if (cancelled) break;
+
+        const props     = feature.properties;
+        const riverName = props["name:en"] || props["name"] || "River";
+        const riverId   = nameToId(riverName);
+        const discharge = dischargeMap.get(riverId) ?? 80_000;
+        const { duration, weight } = _riverStyle(discharge);
+        const color = RIVER_COLOR;
+
+        // Normalise: both LineString and MultiLineString → array of coordinate arrays
+        const segmentArrays: [number, number][][] =
+          feature.geometry.type === "MultiLineString"
+            ? (feature.geometry as { type: "MultiLineString"; coordinates: [number, number][][] }).coordinates
+            : [(feature.geometry as { type: "LineString"; coordinates: [number, number][] }).coordinates];
+
+        // Find the longest segment and correct its direction for downstream flow
+        const rawLongestSeg = segmentArrays.reduce(
+          (best, seg) => (seg.length > best.length ? seg : best),
+          segmentArrays[0] ?? []
+        );
+        const longestSeg = _ensureDownstream(rawLongestSeg, riverId);
+
+        // Popup HTML (shared across all segments of this river)
+        const station   = (riverStations ?? []).find((s) => s.river_id === riverId);
+        const trendIcon = station?.discharge_trend === "rising"  ? "↑"
+                        : station?.discharge_trend === "falling" ? "↓" : "→";
+        const cusecFmt  = discharge >= 1_000
+          ? `${(discharge / 1_000).toFixed(0)}K`
+          : `${discharge}`;
+        const popupHtml =
+          `<div style="font-family:system-ui,sans-serif;font-size:12px;min-width:160px">
+            <div style="font-weight:700;color:${color};font-size:13px;margin-bottom:4px">${riverName}</div>
+            ${station
+              ? `<div style="color:#94a3b8;margin-bottom:2px">Station: <b style="color:#e2e8f0">${station.name}</b></div>
+                 <div style="color:#94a3b8;margin-bottom:2px">Discharge: <b style="color:${color}">${cusecFmt} cusecs ${trendIcon}</b></div>
+                 <div style="color:#94a3b8;font-size:10px;margin-top:4px">Updated: ${new Date(station.updated_at).toLocaleString()}</div>`
+              : `<div style="color:#475569;font-size:11px">No live data</div>`
+            }
+          </div>`;
+
+        let particleTargetLine: ReturnType<typeof L.polyline> | null = null;
+
+        for (const rawSeg of segmentArrays) {
+          if (cancelled) break;
+          if (rawSeg.length < 2) continue;
+
+          // Use direction-corrected coords for the particle target segment
+          const isLongest = rawSeg === rawLongestSeg;
+          const seg    = isLongest ? longestSeg : rawSeg;
+          const coords = seg.map(([lng, lat]) => [lat, lng] as [number, number]);
+
+          // Glow halo
+          L.polyline(coords, {
+            color,
+            weight:      weight + 7,
+            opacity:     0.12,
+            interactive: false,
+            lineCap:     "round",
+          }).addTo(riverLayerRef.current!);
+
+          // Solid outline
+          const line = L.polyline(coords, {
+            color,
+            weight,
+            opacity:  0.80,
+            lineCap:  "round",
+            lineJoin: "round",
+          }).addTo(riverLayerRef.current!);
+
+          line.bindPopup(popupHtml);
+
+          if (isLongest) particleTargetLine = line;
+        }
+
+        // Attach particles to the longest segment once per river
+        if (particleTargetLine && !particlesAdded.has(riverId)) {
+          particlesAdded.add(riverId);
+          const target = particleTargetLine;
+
+          requestAnimationFrame(() => {
+            if (cancelled) return;
+            const pathEl = target.getElement() as SVGPathElement | null;
+            if (!pathEl) return;
+            const svgContainer = pathEl.ownerSVGElement;
+            if (!svgContainer) return;
+
+            const pathId = `rfp-${riverId}-${Math.random().toString(36).slice(2, 7)}`;
+            pathEl.id = pathId;
+
+            const N = 7;
+            for (let i = 0; i < N; i++) {
+              const begin = `${-((i / N) * duration).toFixed(3)}s`;
+
+              const glow = document.createElementNS(NS, "circle");
+              glow.setAttribute("r", "4");
+              glow.setAttribute("fill", color);
+              glow.setAttribute("opacity", "0.20");
+              glow.setAttribute("pointer-events", "none");
+
+              const dot = document.createElementNS(NS, "circle");
+              dot.setAttribute("r", "2");
+              dot.setAttribute("fill", "white");
+              dot.setAttribute("opacity", "0.85");
+              dot.setAttribute("pointer-events", "none");
+
+              for (const el of [glow, dot]) {
+                const anim = document.createElementNS(NS, "animateMotion");
+                anim.setAttribute("dur",         `${duration}s`);
+                anim.setAttribute("repeatCount", "indefinite");
+                anim.setAttribute("begin",       begin);
+                anim.setAttribute("rotate",      "auto");
+
+                const mpath = document.createElementNS(NS, "mpath");
+                mpath.setAttribute("href", `#${pathId}`);
+                mpath.setAttributeNS(XLNS, "xlink:href", `#${pathId}`);
+
+                anim.appendChild(mpath);
+                el.appendChild(anim);
+                svgContainer.appendChild(el);
+                riverParticlesRef.current.push(el);
+              }
+            }
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      riverParticlesRef.current.forEach((el) => el.parentNode?.removeChild(el));
+      riverParticlesRef.current = [];
+      riverLayerRef.current?.clearLayers();
+    };
+  }, [showRivers, riverStations, mapReady]);
 
   // ── Selected location marker ───────────────────────────────────────────────
   useEffect(() => {

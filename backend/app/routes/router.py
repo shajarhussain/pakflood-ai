@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.routes import health, prediction, boundaries, flood_events, zones, districts, chat, weather, auth
+from app.routes import health, prediction, boundaries, flood_events, zones, districts, chat, weather, auth, rivers
 
 router = APIRouter()
 
@@ -13,3 +13,4 @@ router.include_router(districts.router, tags=["districts"])
 router.include_router(chat.router,    tags=["chat"])
 router.include_router(weather.router, tags=["weather"])
 router.include_router(auth.router,    tags=["auth"])
+router.include_router(rivers.router,  tags=["rivers"])
