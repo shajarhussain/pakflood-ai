@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { PredictionResponse, ZonesGeoJSON, FloodEvent } from "@/lib/types";
 import { predictFloodRisk, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
@@ -27,9 +27,11 @@ export default function FloodApp() {
   const [error,            setError           ] = useState<string | null>(null);
   const [modelStatus,      setModelStatus     ] = useState<ModelStatus | null>(null);
 
-  const [zones,        setZones       ] = useState<ZonesGeoJSON | null>(null);
-  const [showZones,    setShowZones   ] = useState(false);
-  const [zonesLoading, setZonesLoading] = useState(false);
+  const [zones,             setZones            ] = useState<ZonesGeoJSON | null>(null);
+  const [showZones,         setShowZones        ] = useState(false);
+  const [showZonePolygons,  setShowZonePolygons ] = useState(false);
+  const [zonesLoading,      setZonesLoading     ] = useState(false);
+  const [riskFilter,        setRiskFilter       ] = useState<string | null>(null);
 
   const [events,        setEvents       ] = useState<FloodEvent[]>([]);
   const [showEvents,    setShowEvents   ] = useState(false);
@@ -45,8 +47,20 @@ export default function FloodApp() {
       setZones(data);
       setZonesLoading(false);
     }
+    if (showZones) setRiskFilter(null);
     setShowZones((prev) => !prev);
   }, [showZones, zones]);
+
+  const handleToggleZonePolygons = useCallback(async () => {
+    if (!showZonePolygons && !zones) {
+      setZonesLoading(true);
+      const data = await fetchZonesGeoJSON();
+      setZones(data);
+      setZonesLoading(false);
+    }
+    if (showZonePolygons) setRiskFilter(null);
+    setShowZonePolygons((prev) => !prev);
+  }, [showZonePolygons, zones]);
 
   const handleToggleEvents = useCallback(async () => {
     if (!showEvents && events.length === 0) {
@@ -91,6 +105,15 @@ export default function FloodApp() {
   const zonesAge   = zones?.metadata?.computed_at ? formatAge(zones.metadata.computed_at) : null;
   const zonesCount = zones?.metadata?.total_points ?? 0;
 
+  const riskCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of zones?.features ?? []) {
+      const lvl = f.properties.risk_level as string;
+      counts[lvl] = (counts[lvl] ?? 0) + 1;
+    }
+    return counts;
+  }, [zones]);
+
   return (
     <div className="relative w-screen h-screen bg-slate-950 overflow-hidden">
       {/* Full-screen map */}
@@ -99,6 +122,8 @@ export default function FloodApp() {
         onLocationSelect={runPrediction}
         zones={zones}
         showZones={showZones}
+        showZonePolygons={showZonePolygons}
+        riskFilter={riskFilter}
         selectedEvent={selectedEvent}
       />
 
@@ -177,6 +202,30 @@ export default function FloodApp() {
             )}
           </button>
 
+          {/* Zone map toggle */}
+          <button
+            onClick={handleToggleZonePolygons}
+            disabled={zonesLoading}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              showZonePolygons
+                ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
+                : "bg-slate-800/60 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-slate-700/60"
+            }`}
+            title="District risk zones — coloured by dominant severity"
+          >
+            {zonesLoading && !showZones ? (
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M9 20.999H5a2 2 0 0 1-2-2v-4m6 6 6-6m-6 6V9m6-8H5a2 2 0 0 0-2 2v4m18 4v4a2 2 0 0 1-2 2h-4m6-6-6 6m6-6H15m0 0V9m0 6 6-6M15 3h4a2 2 0 0 1 2 2v4"/>
+              </svg>
+            )}
+            {showZonePolygons ? "Hide Zones" : "Zones"}
+          </button>
+
           {/* My Location */}
           <button
             onClick={handleGeolocate}
@@ -203,28 +252,78 @@ export default function FloodApp() {
         </div>
       )}
 
-      {/* Heatmap legend */}
-      {showZones && !zonesLoading && (
-        <div className={`absolute bottom-8 z-[1000] ${showEvents ? "left-[292px]" : "left-4"}`}>
-          <div className="px-3 py-2.5 rounded-xl bg-slate-900/90 border border-white/10 backdrop-blur-sm">
-            <p className="text-slate-500 text-[10px] uppercase tracking-wider mb-2">
-              Risk Heatmap
-              {zonesCount > 0 && <span className="ml-1 text-slate-600">· {zonesCount} pts</span>}
-            </p>
-            {(["Severe", "High", "Moderate", "Low"] as const).map((level) => (
-              <div key={level} className="flex items-center gap-2 mb-1 last:mb-0">
-                <div className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: { Severe: "#ef4444", High: "#f97316", Moderate: "#eab308", Low: "#22c55e" }[level] }}
-                />
-                <span className="text-slate-400 text-[11px]">{level}</span>
+      {/* Risk filter panel */}
+      {(showZones || showZonePolygons) && !zonesLoading && (() => {
+        const LEVELS = [
+          { key: "Severe",   color: "#ef4444" },
+          { key: "High",     color: "#f97316" },
+          { key: "Moderate", color: "#eab308" },
+          { key: "Low",      color: "#22c55e" },
+        ] as const;
+        return (
+          <div className={`absolute bottom-8 z-[1000] transition-all ${showEvents ? "left-[292px]" : "left-4"}`}>
+            <div className="rounded-xl bg-slate-900/90 border border-white/10 backdrop-blur-sm overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5 border-b border-white/5">
+                <span className="text-slate-500 text-[10px] uppercase tracking-wider">
+                  Risk Filter
+                  {zonesCount > 0 && <span className="ml-1 text-slate-600">· {zonesCount} pts</span>}
+                </span>
+                {riskFilter && (
+                  <button
+                    onClick={() => setRiskFilter(null)}
+                    className="text-[9px] text-slate-500 hover:text-slate-300 uppercase tracking-wider ml-3 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-            ))}
-            {zones?.metadata?.is_fresh === false && (
-              <p className="text-amber-500/70 text-[10px] mt-2 border-t border-white/5 pt-2">Stale — refresh queued</p>
-            )}
+
+              {/* Level buttons */}
+              <div className="flex flex-col p-1.5 gap-0.5">
+                {LEVELS.map(({ key, color }) => {
+                  const active  = riskFilter === key;
+                  const dimmed  = !!riskFilter && !active;
+                  const count   = riskCounts[key] ?? 0;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setRiskFilter(active ? null : key)}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all"
+                      style={{
+                        background:  active ? `${color}18` : "transparent",
+                        border:      active ? `1px solid ${color}50` : "1px solid transparent",
+                        opacity:     dimmed ? 0.4 : 1,
+                      }}
+                    >
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0 transition-transform"
+                        style={{
+                          backgroundColor: color,
+                          transform: active ? "scale(1.3)" : "scale(1)",
+                          boxShadow: active ? `0 0 8px ${color}80` : "none",
+                        }}
+                      />
+                      <span className="text-[11px] font-medium flex-1" style={{ color: active ? color : "#94a3b8" }}>
+                        {key}
+                      </span>
+                      {count > 0 && (
+                        <span className="text-[10px] tabular-nums" style={{ color: active ? color : "#475569" }}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {zones?.metadata?.is_fresh === false && (
+                <p className="text-amber-500/70 text-[10px] px-3 pb-2 border-t border-white/5 pt-1.5">Stale — refresh queued</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Hint */}
       {!selectedLocation && !loading && !showEvents && (
