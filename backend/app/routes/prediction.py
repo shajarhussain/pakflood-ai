@@ -1,13 +1,13 @@
-import httpx
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.controllers.prediction_controller import run_prediction
 from app.hazards.flood.model import get_flood_model
-from app.hazards.flood.rules import DISCLAIMER, classify_risk
-from app.hazards.flood.features import FEATURE_COLS
+from app.hazards.flood.rules import DISCLAIMER
 from app.models.prediction import PredictionResponse
-from app.zones.open_meteo_adapter import fetch_weather_features, features_to_vector
 from app.zones.zone_geojson import single_point_to_geojson
+from app.zones.zone_repository import ZoneRepository
 
 router = APIRouter()
 
@@ -37,52 +37,36 @@ async def risk_by_location(
     lng: float = Query(..., ge=-180, le=180, description="Longitude"),
 ) -> dict:
     """
-    Real-time flood risk for any coordinate as a GeoJSON Feature.
+    Flood risk for any coordinate as a GeoJSON Feature, served from DB cache.
 
-    Calls Open-Meteo live → runs XGBoost → returns a GeoJSON Feature
-    so the frontend can drop it directly onto a Mapbox/Leaflet layer
-    or pass it to Turf.js without any transformation.
-
-    Use for: user GPS location, map click, district centre.
+    Returns the nearest pre-computed zone grid point. The grid is refreshed
+    every 3 hours by the background scheduler — no live Open-Meteo call is made.
     """
-    model = get_flood_model()
-    if not model.is_ready:
-        raise HTTPException(status_code=503, detail="Model artifact not loaded.")
+    repo  = ZoneRepository()
+    point = await asyncio.to_thread(repo.get_nearest_zone_point, lat, lng)
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        features = await fetch_weather_features(lat, lng, client)
-
-    if features is None:
+    if point is None:
         raise HTTPException(
             status_code=503,
-            detail="Weather data unavailable for this location.",
+            detail="No cached zone data yet — the background scheduler is still computing. Try again in ~10 minutes.",
         )
 
-    xgb        = model._model
-    vector     = features_to_vector(features).reshape(1, -1)
-    flood_prob = float(xgb.predict_proba(vector)[0][1])
-    risk_level = classify_risk(flood_prob)
-    confidence = round(float(2.0 * abs(flood_prob - 0.5)), 4)
-
-    import numpy as np
-    imps    = np.array(xgb.feature_importances_)
-    top_idx = np.argsort(imps)[-3:][::-1]
-    top_factors = [
-        {
-            "name":       FEATURE_COLS[i],
-            "value":      round(float(vector[0][i]), 4),
-            "importance": round(float(imps[i]), 4),
-        }
-        for i in top_idx
-    ]
+    top_factors = []
+    for i in (1, 2, 3):
+        name = point.get(f"top_feature_{i}_name")
+        val  = point.get(f"top_feature_{i}_value")
+        imp  = point.get(f"top_feature_{i}_imp")
+        if name and val is not None and imp is not None:
+            top_factors.append({"name": name, "value": float(val), "importance": float(imp)})
 
     prediction = {
-        "flood_prob":      round(flood_prob, 4),
-        "risk_level":      risk_level,
-        "confidence":      confidence,
-        "top_factors":     top_factors,
-        "disclaimer":      DISCLAIMER,
-        "weather_features": features,
+        "flood_prob":  round(float(point["flood_prob"]), 4),
+        "risk_level":  point["risk_level"],
+        "confidence":  round(float(point["confidence"]), 4),
+        "top_factors": top_factors,
+        "disclaimer":  DISCLAIMER,
+        "cached_at":   point.get("computed_at"),
+        "nearest_grid_point": {"lat": point["lat"], "lng": point["lng"]},
     }
 
     return single_point_to_geojson(lat, lng, prediction)
