@@ -167,7 +167,7 @@ export default function FloodMap({ selectedLocation, onLocationSelect, zones, sh
         maxZoom:            MAP_MAX_ZOOM,
         maxBounds:          PAKISTAN_MAX_BOUNDS,
         maxBoundsViscosity: 0.8,
-        zoomControl:        true,
+        zoomControl:        false,
       });
 
       if (destroyed) { map.remove(); return; }

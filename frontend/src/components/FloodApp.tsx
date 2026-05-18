@@ -9,6 +9,7 @@ import AuthModal from "@/components/AuthModal";
 import SearchBar from "@/components/SearchBar";
 import FloodEventsPanel from "@/components/FloodEventsPanel";
 import ChatPanel from "@/components/ChatPanel";
+import ProfileButton from "@/components/ProfileButton";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), { ssr: false });
 
@@ -54,7 +55,6 @@ export default function FloodApp() {
   const { user, logout } = useAuth();
 
   const handleAskAI = useCallback(() => {
-    if (!user) { setShowAuthModal(true); return; }
     setShowChat((v) => !v);
   }, [user]);
 
@@ -308,24 +308,13 @@ export default function FloodApp() {
             My Location
           </button>
 
-          {/* User badge */}
-          {user && (
-            <>
-              <div className="w-px h-4 bg-white/10 shrink-0" />
-              <div
-                className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs font-bold shrink-0"
-                title={user.email}
-              >
-                {user.email[0].toUpperCase()}
-              </div>
-              <button
-                onClick={logout}
-                className="text-slate-500 hover:text-slate-300 text-xs transition-colors shrink-0"
-              >
-                Sign Out
-              </button>
-            </>
-          )}
+          {/* Profile button — always visible */}
+          <div className="w-px h-4 bg-white/10 shrink-0" />
+          <ProfileButton
+            email={user?.email ?? null}
+            onSignIn={() => setShowAuthModal(true)}
+            onSignOut={logout}
+          />
         </div>
       </div>
 
@@ -472,9 +461,9 @@ export default function FloodApp() {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           Ask AI
-          {!user && (
+          {/* {!user && (
             <span className="text-[10px] text-slate-500 font-normal">· Sign in</span>
-          )}
+          )} */}
         </button>
       )}
 
@@ -492,13 +481,28 @@ export default function FloodApp() {
       )}
 
       {/* AI Chat panel */}
-      {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
+      {showChat && (
+        <ChatPanel
+          onClose={() => setShowChat(false)}
+          isSignedIn={!!user}
+          onRequestSignIn={() => { setShowChat(false); setShowAuthModal(true); }}
+        />
+      )}
 
       {/* Auth modal */}
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => { setShowAuthModal(false); setShowChat(true); }}
+        />
+      )}
+
+      {/* AI Chat panel */}
+      {showChat && (
+        <ChatPanel
+          onClose={() => setShowChat(false)}
+          isSignedIn={!!user}
+          onRequestSignIn={() => setShowAuthModal(true)}
         />
       )}
 
