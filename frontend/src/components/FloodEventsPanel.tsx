@@ -6,6 +6,11 @@ interface Props {
   onClose: () => void;
   selectedEventId?: string | null;
   onEventSelect?: (event: FloodEvent | null) => void;
+  isSignedIn?: boolean;
+  onRequestSignIn?: () => void;
+  aiInsight?: string | null;
+  aiInsightLoading?: boolean;
+  aiInsightEventId?: string | null;
 }
 
 function formatAffected(n: number | null): string {
@@ -26,7 +31,25 @@ function eventColor(year: number) {
   return YEAR_COLOR[year] ?? { text: "#94a3b8", bg: "rgba(148,163,184,0.08)", border: "rgba(148,163,184,0.2)" };
 }
 
-export default function FloodEventsPanel({ events, onClose, selectedEventId, onEventSelect }: Props) {
+function ThinkingDots() {
+  return (
+    <div className="flex items-center gap-1 py-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function FloodEventsPanel({
+  events, onClose, selectedEventId, onEventSelect,
+  isSignedIn = false, onRequestSignIn,
+  aiInsight, aiInsightLoading, aiInsightEventId,
+}: Props) {
   return (
     <div className="absolute top-[56px] left-0 bottom-0 z-[1000] w-72 flex flex-col bg-slate-950/95 border-r border-white/10 backdrop-blur-sm animate-fade-up">
       {/* Header */}
@@ -54,6 +77,7 @@ export default function FloodEventsPanel({ events, onClose, selectedEventId, onE
           events.map((event) => {
             const c      = eventColor(event.year);
             const active = selectedEventId === event.id;
+            const isThisInsight = active && aiInsightEventId === event.id;
             return (
               <div
                 key={event.id}
@@ -123,6 +147,39 @@ export default function FloodEventsPanel({ events, onClose, selectedEventId, onE
                 <p className="text-slate-500 text-[10px] leading-relaxed line-clamp-3">
                   {event.description}
                 </p>
+
+                {/* ── AI Insight section (active card only) ─────────────────── */}
+                {active && (
+                  <div
+                    className="rounded-lg p-2.5 mt-0.5"
+                    style={{ background: "rgba(6,182,212,0.06)", border: "1px solid rgba(6,182,212,0.18)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* AI label row */}
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <svg className="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+                      </svg>
+                      <span className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">AI Analysis</span>
+                    </div>
+
+                    {/* Content states */}
+                    {!isSignedIn ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRequestSignIn?.(); }}
+                        className="w-full text-left text-[10px] text-slate-500 hover:text-cyan-400 transition-colors"
+                      >
+                        🔒 Sign in to get AI event analysis →
+                      </button>
+                    ) : isThisInsight && aiInsightLoading ? (
+                      <ThinkingDots />
+                    ) : isThisInsight && aiInsight ? (
+                      <p className="text-slate-300 text-[10px] leading-relaxed">{aiInsight}</p>
+                    ) : (
+                      <p className="text-slate-600 text-[10px]">Generating analysis…</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Click hint when not active */}
                 {!active && (

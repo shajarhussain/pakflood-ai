@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData } from "@/lib/types";
-import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
+import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, sendChatMessage, type ModelStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import WeatherCard from "@/components/WeatherCard";
 import AuthModal from "@/components/AuthModal";
@@ -44,6 +44,10 @@ export default function FloodApp() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FloodEvent | null>(null);
 
+  const [aiInsight,        setAiInsight       ] = useState<string | null>(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsightEventId, setAiInsightEventId] = useState<string | null>(null);
+
   const [showChat,      setShowChat     ] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -55,6 +59,40 @@ export default function FloodApp() {
   }, [user]);
 
   useEffect(() => { fetchModelStatus().then(setModelStatus); }, []);
+
+  // Auto-fetch AI insight when a signed-in user selects a flood event
+  useEffect(() => {
+    if (!selectedEvent || !user) {
+      setAiInsight(null);
+      setAiInsightLoading(false);
+      setAiInsightEventId(null);
+      return;
+    }
+    setAiInsight(null);
+    setAiInsightLoading(true);
+    setAiInsightEventId(selectedEvent.id);
+
+    const ev = selectedEvent;
+    const affectedStr = ev.affected_provinces.join(", ") || "multiple provinces";
+    const affectedNum = ev.estimated_affected
+      ? (ev.estimated_affected >= 1e6 ? `${(ev.estimated_affected / 1e6).toFixed(0)}M` : `${(ev.estimated_affected / 1e3).toFixed(0)}K`)
+      : null;
+    const prompt = [
+      `Analyze the ${ev.year} Pakistan flood disaster: "${ev.title}".`,
+      `Affected provinces: ${affectedStr}.`,
+      ev.peak_month ? `Peak month: ${ev.peak_month}.` : "",
+      affectedNum   ? `People affected: ${affectedNum}.` : "",
+      ev.damage_usd_billion != null ? `Economic damage: $${ev.damage_usd_billion}B.` : "",
+      "Cover: primary meteorological and hydrological causes, most severely impacted regions,",
+      "humanitarian and infrastructure impact, and key preparedness lessons.",
+      "Keep response to 4–6 concise sentences.",
+    ].filter(Boolean).join(" ");
+
+    sendChatMessage(prompt, [])
+      .then(setAiInsight)
+      .catch(() => setAiInsight("AI analysis unavailable for this event. Please try again."))
+      .finally(() => setAiInsightLoading(false));
+  }, [selectedEvent?.id, user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleZones = useCallback(async () => {
     if (!showZones && !zones) {
@@ -471,6 +509,11 @@ export default function FloodApp() {
           onClose={() => { setShowEvents(false); setSelectedEvent(null); }}
           selectedEventId={selectedEvent?.id ?? null}
           onEventSelect={setSelectedEvent}
+          isSignedIn={!!user}
+          onRequestSignIn={() => setShowAuthModal(true)}
+          aiInsight={aiInsight}
+          aiInsightLoading={aiInsightLoading}
+          aiInsightEventId={aiInsightEventId}
         />
       )}
     </div>
