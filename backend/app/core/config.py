@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     OPEN_METEO_RETRY_BASE_SEC: float = 15.0     # backoff base: 15s, 30s, 60s, 120s
     ZONE_STARTUP_DELAY_SEC: int = 60            # wait before first computation on startup
 
+    # ── Gemini AI ─────────────────────────────────────────────────────────────
+    GEMINI_API_KEY: str = ""
+
+    # ── OpenWeatherMap ────────────────────────────────────────────────────────
+    OPENWEATHER_API_KEY: str = ""
+
     # ── Pakistan bounding box ─────────────────────────────────────────────────
     PAK_NORTH: float = 37.0
     PAK_SOUTH: float = 23.5
