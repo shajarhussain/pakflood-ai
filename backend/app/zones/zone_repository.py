@@ -226,7 +226,10 @@ class ZoneRepository:
         Raises ValueError if the point count is below the minimum threshold.
         """
         from app.zones.grid_generator import generate_pakistan_grid
-        expected = len(generate_pakistan_grid())
+        from app.zones.boundary_filter import filter_grid_to_pakistan
+        raw_grid = generate_pakistan_grid()
+        filtered = filter_grid_to_pakistan(raw_grid)
+        expected = len(filtered) if filtered else len(raw_grid)
         minimum  = int(expected * _MIN_POINTS_FRACTION)
 
         if len(points) < minimum:
