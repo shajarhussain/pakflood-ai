@@ -2,13 +2,14 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData } from "@/lib/types";
-import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
+import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, sendChatMessage, type ModelStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import WeatherCard from "@/components/WeatherCard";
 import AuthModal from "@/components/AuthModal";
 import SearchBar from "@/components/SearchBar";
 import FloodEventsPanel from "@/components/FloodEventsPanel";
 import ChatPanel from "@/components/ChatPanel";
+import ProfileButton from "@/components/ProfileButton";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), { ssr: false });
 
@@ -44,17 +45,54 @@ export default function FloodApp() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FloodEvent | null>(null);
 
+  const [aiInsight,        setAiInsight       ] = useState<string | null>(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsightEventId, setAiInsightEventId] = useState<string | null>(null);
+
   const [showChat,      setShowChat     ] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const { user, logout } = useAuth();
 
   const handleAskAI = useCallback(() => {
-    if (!user) { setShowAuthModal(true); return; }
     setShowChat((v) => !v);
   }, [user]);
 
   useEffect(() => { fetchModelStatus().then(setModelStatus); }, []);
+
+  // Auto-fetch AI insight when a signed-in user selects a flood event
+  useEffect(() => {
+    if (!selectedEvent || !user) {
+      setAiInsight(null);
+      setAiInsightLoading(false);
+      setAiInsightEventId(null);
+      return;
+    }
+    setAiInsight(null);
+    setAiInsightLoading(true);
+    setAiInsightEventId(selectedEvent.id);
+
+    const ev = selectedEvent;
+    const affectedStr = ev.affected_provinces.join(", ") || "multiple provinces";
+    const affectedNum = ev.estimated_affected
+      ? (ev.estimated_affected >= 1e6 ? `${(ev.estimated_affected / 1e6).toFixed(0)}M` : `${(ev.estimated_affected / 1e3).toFixed(0)}K`)
+      : null;
+    const prompt = [
+      `Analyze the ${ev.year} Pakistan flood disaster: "${ev.title}".`,
+      `Affected provinces: ${affectedStr}.`,
+      ev.peak_month ? `Peak month: ${ev.peak_month}.` : "",
+      affectedNum   ? `People affected: ${affectedNum}.` : "",
+      ev.damage_usd_billion != null ? `Economic damage: $${ev.damage_usd_billion}B.` : "",
+      "Cover: primary meteorological and hydrological causes, most severely impacted regions,",
+      "humanitarian and infrastructure impact, and key preparedness lessons.",
+      "Keep response to 4–6 concise sentences.",
+    ].filter(Boolean).join(" ");
+
+    sendChatMessage(prompt, [])
+      .then(setAiInsight)
+      .catch(() => setAiInsight("AI analysis unavailable for this event. Please try again."))
+      .finally(() => setAiInsightLoading(false));
+  }, [selectedEvent?.id, user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleZones = useCallback(async () => {
     if (!showZones && !zones) {
@@ -270,24 +308,13 @@ export default function FloodApp() {
             My Location
           </button>
 
-          {/* User badge */}
-          {user && (
-            <>
-              <div className="w-px h-4 bg-white/10 shrink-0" />
-              <div
-                className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs font-bold shrink-0"
-                title={user.email}
-              >
-                {user.email[0].toUpperCase()}
-              </div>
-              <button
-                onClick={logout}
-                className="text-slate-500 hover:text-slate-300 text-xs transition-colors shrink-0"
-              >
-                Sign Out
-              </button>
-            </>
-          )}
+          {/* Profile button — always visible */}
+          <div className="w-px h-4 bg-white/10 shrink-0" />
+          <ProfileButton
+            email={user?.email ?? null}
+            onSignIn={() => setShowAuthModal(true)}
+            onSignOut={logout}
+          />
         </div>
       </div>
 
@@ -434,9 +461,9 @@ export default function FloodApp() {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           Ask AI
-          {!user && (
+          {/* {!user && (
             <span className="text-[10px] text-slate-500 font-normal">· Sign in</span>
-          )}
+          )} */}
         </button>
       )}
 
@@ -454,13 +481,28 @@ export default function FloodApp() {
       )}
 
       {/* AI Chat panel */}
-      {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
+      {showChat && (
+        <ChatPanel
+          onClose={() => setShowChat(false)}
+          isSignedIn={!!user}
+          onRequestSignIn={() => { setShowChat(false); setShowAuthModal(true); }}
+        />
+      )}
 
       {/* Auth modal */}
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => { setShowAuthModal(false); setShowChat(true); }}
+        />
+      )}
+
+      {/* AI Chat panel */}
+      {showChat && (
+        <ChatPanel
+          onClose={() => setShowChat(false)}
+          isSignedIn={!!user}
+          onRequestSignIn={() => setShowAuthModal(true)}
         />
       )}
 
@@ -471,6 +513,11 @@ export default function FloodApp() {
           onClose={() => { setShowEvents(false); setSelectedEvent(null); }}
           selectedEventId={selectedEvent?.id ?? null}
           onEventSelect={setSelectedEvent}
+          isSignedIn={!!user}
+          onRequestSignIn={() => setShowAuthModal(true)}
+          aiInsight={aiInsight}
+          aiInsightLoading={aiInsightLoading}
+          aiInsightEventId={aiInsightEventId}
         />
       )}
     </div>

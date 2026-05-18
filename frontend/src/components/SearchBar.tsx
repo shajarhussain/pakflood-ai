@@ -85,11 +85,12 @@ export default function SearchBar({ onSelect }: Props) {
   };
 
   return (
-    <div ref={containerRef} className="absolute top-[60px] left-4 z-[1000] w-72">
+    <div ref={containerRef} className="absolute top-[72px] left-1/9 z-[1100] w-72 sm:w-65" style={{ transform: "translateX(-50%)" }}>
       {/* Input field */}
       <div className="relative">
+        {/* Search icon */}
         <svg
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
           fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
         >
           <circle cx="11" cy="11" r="8" />
@@ -106,7 +107,7 @@ export default function SearchBar({ onSelect }: Props) {
           placeholder="Search district… (e.g. Lahore)"
           autoComplete="off"
           spellCheck={false}
-          className="w-full pl-8 pr-7 py-2.5 rounded-xl bg-slate-900/95 border border-white/10 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-cyan-500/40 focus:bg-slate-900 transition-colors backdrop-blur-sm shadow-lg"
+          className="w-full pl-10 pr-8 py-2.5 rounded-full bg-slate-900/90 border border-white/15 text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:bg-slate-900 transition-all backdrop-blur-md shadow-xl"
         />
 
         {/* Right icon: spinner or clear */}
@@ -133,7 +134,7 @@ export default function SearchBar({ onSelect }: Props) {
 
       {/* Dropdown results */}
       {isOpen && results.length > 0 && (
-        <div className="mt-1.5 rounded-xl bg-slate-900/98 border border-white/10 shadow-2xl overflow-hidden backdrop-blur-sm animate-fade-up">
+        <div className="mt-1.5 rounded-2xl bg-slate-900/98 border border-white/10 shadow-2xl overflow-hidden backdrop-blur-md animate-fade-up">
           {results.map((r, i) => {
             const isHighlighted = highlight === i;
             const summary       = r.summary;
@@ -198,7 +199,7 @@ export default function SearchBar({ onSelect }: Props) {
 
       {/* No results hint */}
       {isOpen && results.length === 0 && !loading && query.trim().length >= 2 && (
-        <div className="mt-1.5 px-4 py-3 rounded-xl bg-slate-900/98 border border-white/10 shadow-xl backdrop-blur-sm">
+        <div className="mt-1.5 px-4 py-3 rounded-2xl bg-slate-900/98 border border-white/10 shadow-xl backdrop-blur-md">
           <p className="text-slate-500 text-sm">No districts found for &ldquo;{query}&rdquo;</p>
         </div>
       )}

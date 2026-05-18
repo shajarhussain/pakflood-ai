@@ -2,9 +2,9 @@
 Gemini-backed chat service for PakFlood AI.
 
 Intent routing: detect what the user is asking about, fetch only the
-relevant DB data, build a compact context string (<500 tokens), then
-call gemini-1.5-flash.  History is trimmed to the last 5 exchanges so
-the prompt stays cheap.
+relevant DB data, build a compact context string (<600 tokens), then
+call Gemini.  History is trimmed to the last 5 exchanges so the prompt
+stays cheap.
 """
 
 from __future__ import annotations
@@ -22,14 +22,21 @@ logger = logging.getLogger(__name__)
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 _SYSTEM = (
-    "You are PakFlood AI Assistant — an expert on Pakistan flood risk. "
-    "You help users understand flood predictions, historical events, weather, "
-    "and district-level risk analysis. "
-    "Rules: answer concisely (2–5 sentences or a short list). "
-    "Use the provided data context when answering. "
-    "If data is missing, say so clearly. "
-    "Always note that AI predictions are not official warnings — "
-    "refer users to NDMA, PMD, or PDMA for emergency decisions."
+    "You are PakFlood AI Assistant — an expert on Pakistan flood risk, weather, "
+    "and climate factors. You help users understand flood predictions, current and "
+    "historical weather conditions, seasonal patterns, and district-level risk. "
+    "Rules:\n"
+    "- Answer concisely (2–6 sentences or a short list).\n"
+    "- Use the provided data context when answering. If data is missing, say so.\n"
+    "- When discussing weather, explain how each factor affects flood probability: "
+    "e.g. high soil moisture + heavy rain = runoff with no absorption; "
+    "low pressure systems bring sustained rainfall; monsoon season (June–Oct) "
+    "dramatically elevates risk across Pakistan.\n"
+    "- Unit hints in the data: pressure stored in Pa (divide by 100 for hPa); "
+    "wind stored in m/s (multiply by 3.6 for km/h); "
+    "evaporation is negative ERA5 convention (magnitude = drying rate).\n"
+    "- Always note AI predictions are not official warnings — "
+    "refer users to NDMA, PMD, or PDMA for emergencies."
 )
 
 # ── Intent keywords ───────────────────────────────────────────────────────────
@@ -46,12 +53,18 @@ _INTENTS: dict[str, set[str]] = {
         "dangerous", "safe", "where is flood",
     },
     "weather": {
-        "weather", "rain", "rainfall", "temperature", "humidity", "monsoon",
-        "precipitation", "wind", "soil moisture", "climate", "current conditions",
+        "weather", "rain", "rainfall", "temperature", "temp", "hot", "cold",
+        "humidity", "humid", "monsoon", "precipitation", "wind", "windy",
+        "soil moisture", "soil", "climate", "current conditions", "forecast",
+        "pressure", "storm", "thunderstorm", "overcast", "cloud", "cloudy",
+        "wet", "dry", "drizzle", "flood cause", "flood factor", "what cause",
+        "why flood", "season", "seasonal", "evaporation", "saturated",
+        "saturation", "how wet", "conditions today", "conditions now",
     },
     "model": {
         "model", "accuracy", "confidence", "algorithm", "machine learning",
         "xgboost", "features", "how does", "how accurate", "how it works",
+        "what features", "factor", "contribute", "contribution",
     },
 }
 
@@ -175,6 +188,7 @@ async def _ctx_zones() -> str:
 
 
 async def _ctx_weather() -> str:
+    """Aggregate weather conditions across Pakistan from the latest zone batch."""
     try:
         repo = ZoneRepository()
         batch = await asyncio.to_thread(repo.get_latest_batch)
@@ -185,11 +199,13 @@ async def _ctx_weather() -> str:
         rows = await asyncio.to_thread(
             lambda: db.table("zone_grid_points")
             .select(
-                "precipitation,precip_7day_avg,temperature,humidity,"
-                "soil_moisture,wind_speed,is_monsoon"
+                "precipitation,precip_3day_avg,precip_7day_avg,"
+                "temperature,temp_3day_avg,humidity,"
+                "soil_moisture,soil_3day_avg,"
+                "wind_speed,pressure,evaporation,is_monsoon"
             )
             .eq("batch_id", batch["id"])
-            .limit(150)
+            .limit(200)
             .execute()
         )
         pts = rows.data or []
@@ -200,21 +216,103 @@ async def _ctx_weather() -> str:
             vals = [float(p[key]) for p in pts if p.get(key) is not None]
             return sum(vals) / len(vals) if vals else 0.0
 
+        precip_1d   = avg("precipitation")
+        precip_3d   = avg("precip_3day_avg")
+        precip_7d   = avg("precip_7day_avg")
+        temp        = avg("temperature")
+        temp_3d     = avg("temp_3day_avg")
+        humidity    = avg("humidity")
+        soil        = avg("soil_moisture")
+        soil_3d     = avg("soil_3day_avg")
+        wind_ms     = avg("wind_speed")
+        pressure_pa = avg("pressure")
+        evap        = avg("evaporation")
         monsoon_pct = sum(1 for p in pts if p.get("is_monsoon")) / len(pts) * 100
+
+        # Convert stored SI units back to human-readable
+        wind_kmh     = wind_ms * 3.6
+        pressure_hpa = pressure_pa / 100.0 if pressure_pa > 1000 else pressure_pa  # handle both Pa and hPa
+        evap_mm      = abs(evap) * 1000 if abs(evap) < 1 else abs(evap)  # negative m → mm
+
+        # Derive flood risk interpretation from weather conditions
+        risk_hints: list[str] = []
+        if precip_1d > 20:
+            risk_hints.append("Heavy rainfall today — significant runoff likely")
+        elif precip_1d > 5:
+            risk_hints.append("Moderate rainfall today")
+        if precip_7d > 50:
+            risk_hints.append("Prolonged wet period — soils near saturation")
+        if soil > 0.35:
+            risk_hints.append("High soil moisture — reduced absorption capacity")
+        if humidity > 80:
+            risk_hints.append("High humidity — rain absorption by soil is limited")
+        if monsoon_pct > 50:
+            risk_hints.append("Monsoon season active — elevated flood risk nationwide")
+
         computed = (batch.get("completed_at") or "")[:16]
-        return (
-            f"Current Weather (Pakistan avg, {len(pts)} sample points, {computed}):\n"
-            f"- 24h precipitation: {avg('precipitation'):.1f}mm\n"
-            f"- 7-day precipitation: {avg('precip_7day_avg'):.1f}mm\n"
-            f"- Temperature: {avg('temperature'):.1f}°C\n"
-            f"- Humidity: {avg('humidity'):.0f}%\n"
-            f"- Soil moisture: {avg('soil_moisture'):.3f}\n"
-            f"- Wind speed: {avg('wind_speed'):.1f} km/h\n"
-            f"- Monsoon season: {'Yes' if monsoon_pct > 50 else 'No'} ({monsoon_pct:.0f}% of points)"
-        )
+        lines = [
+            f"Pakistan Weather Summary ({len(pts)} grid points, {computed}):",
+            f"PRECIPITATION:",
+            f"  Today: {precip_1d:.1f}mm | 3-day avg: {precip_3d:.1f}mm | 7-day avg: {precip_7d:.1f}mm",
+            f"ATMOSPHERE:",
+            f"  Temperature: {temp:.1f}°C (3-day avg: {temp_3d:.1f}°C)",
+            f"  Humidity: {humidity:.0f}% | Pressure: {pressure_hpa:.0f} hPa",
+            f"  Wind speed: {wind_kmh:.1f} km/h | Evaporation rate: {evap_mm:.2f} mm/day",
+            f"SOIL:",
+            f"  Soil moisture: {soil:.3f} (3-day avg: {soil_3d:.3f})",
+            f"  Saturation level: {'High' if soil > 0.35 else 'Moderate' if soil > 0.2 else 'Low'}",
+            f"SEASON:",
+            f"  Monsoon active: {'Yes' if monsoon_pct > 50 else 'No'} ({monsoon_pct:.0f}% of points)",
+        ]
+        if risk_hints:
+            lines.append("FLOOD RISK IMPLICATIONS:")
+            for h in risk_hints:
+                lines.append(f"  - {h}")
+        return "\n".join(lines)
     except Exception as exc:
         logger.error("weather context error: %s", exc)
         return "Weather data temporarily unavailable."
+
+
+async def _ctx_live_weather(lat: float, lng: float, location_name: str = "") -> str:
+    """Fetch live current conditions from OpenWeatherMap for a specific point."""
+    from app.core.config import settings as _settings
+    if not _settings.OPENWEATHER_API_KEY:
+        return ""
+    try:
+        import httpx as _httpx
+        _OWM = "https://api.openweathermap.org/data/2.5/weather"
+        _DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+        async with _httpx.AsyncClient(timeout=8.0) as client:
+            res = await client.get(
+                _OWM,
+                params={"lat": lat, "lon": lng,
+                        "appid": _settings.OPENWEATHER_API_KEY, "units": "metric"},
+            )
+        if not res.is_success:
+            return ""
+        d = res.json()
+        main    = d.get("main", {})
+        wind    = d.get("wind", {})
+        clouds  = d.get("clouds", {})
+        wlist   = d.get("weather", [{}])
+        name    = location_name or d.get("name") or f"{lat:.2f}°N,{lng:.2f}°E"
+        wind_ms = wind.get("speed", 0)
+        wind_dir = _DIRS[round(wind.get("deg", 0) / 45) % 8]
+        return (
+            f"Live Weather — {name} (OpenWeatherMap):\n"
+            f"  Conditions: {wlist[0].get('description', '').title()}\n"
+            f"  Temperature: {main.get('temp', 0):.1f}°C "
+            f"(feels {main.get('feels_like', 0):.1f}°C)\n"
+            f"  Humidity: {main.get('humidity', 0)}% | "
+            f"Pressure: {main.get('pressure', 0)} hPa\n"
+            f"  Wind: {wind_ms * 3.6:.1f} km/h {wind_dir} | "
+            f"Cloud cover: {clouds.get('all', 0)}%\n"
+            f"  Visibility: {round(d.get('visibility', 10000) / 1000, 1)} km"
+        )
+    except Exception as exc:
+        logger.warning("Live weather fetch failed: %s", exc)
+        return ""
 
 
 async def _ctx_district(name: str) -> str:
@@ -232,21 +330,43 @@ async def _ctx_district(name: str) -> str:
             return f"District '{name}' not found in the database."
 
         repo = ZoneRepository()
-        lines = ["District Risk Data:"]
+        lines = ["District Risk & Weather Data:"]
         for d in districts[:2]:
-            pt = await asyncio.to_thread(
-                repo.get_nearest_zone_point,
-                d["center_lat"], d["center_lng"], 1.2,
-            )
+            lat, lng = d["center_lat"], d["center_lng"]
+            pt = await asyncio.to_thread(repo.get_nearest_zone_point, lat, lng, 1.2)
             if pt:
-                risk = pt.get("risk_level", "Unknown")
-                prob = float(pt.get("flood_prob") or 0) * 100
-                lines.append(
+                risk  = pt.get("risk_level", "Unknown")
+                prob  = float(pt.get("flood_prob") or 0) * 100
+                conf  = float(pt.get("confidence") or 0) * 100
+                prec  = pt.get("precipitation")
+                hum   = pt.get("humidity")
+                soil  = pt.get("soil_moisture")
+                temp  = pt.get("temperature")
+                wind  = pt.get("wind_speed")
+                line  = (
                     f"- {d['name']} ({d['province']}): {risk} risk, "
-                    f"flood probability {prob:.0f}%"
+                    f"flood prob {prob:.0f}% (confidence {conf:.0f}%)"
                 )
+                details: list[str] = []
+                if prec  is not None: details.append(f"rain {float(prec):.1f}mm")
+                if temp  is not None: details.append(f"temp {float(temp):.1f}°C")
+                if hum   is not None: details.append(f"humidity {float(hum):.0f}%")
+                if soil  is not None: details.append(f"soil {float(soil):.3f}")
+                if wind  is not None: details.append(f"wind {float(wind)*3.6:.1f}km/h")
+                if details:
+                    line += f"\n  Weather: {', '.join(details)}"
+                lines.append(line)
             else:
                 lines.append(f"- {d['name']} ({d['province']}): no zone data")
+
+        # Attach live OWM weather for the first matched district
+        if districts:
+            d0 = districts[0]
+            live = await _ctx_live_weather(d0["center_lat"], d0["center_lng"], d0["name"])
+            if live:
+                lines.append("")
+                lines.append(live)
+
         return "\n".join(lines)
     except Exception as exc:
         logger.error("district context error: %s", exc)
@@ -316,6 +436,10 @@ async def generate_reply(message: str, history: list[dict]) -> str:
         tasks.append(_ctx_zones())
     if "weather" in intents:
         tasks.append(_ctx_weather())
+        # If no specific district mentioned, include a live OWM snapshot for
+        # central Pakistan (Lahore area) as a concrete reference point
+        if not district:
+            tasks.append(_ctx_live_weather(30.3753, 69.3451, "Central Pakistan"))
     if "model" in intents:
         tasks.append(_ctx_model())
     if district:
