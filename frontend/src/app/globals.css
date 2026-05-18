@@ -1,221 +1,51 @@
 @import "tailwindcss";
 
-/* ── Satellite Ops Design Tokens ─────────────────────────────── */
-:root {
-  --ops-bg:      #050C14;
-  --ops-surface: #091829;
-  --ops-teal:    #00FFD1;
-  --ops-purple:  #9B59FF;
-}
-
-@keyframes ops-active-blink {
-  0%, 100% { opacity: 1;   box-shadow: 0 0 6px rgba(0,255,209,0.8); }
-  50%       { opacity: 0.5; box-shadow: 0 0 2px rgba(0,255,209,0.2); }
-}
-
-@keyframes district-severe-pulse {
-  0%, 100% { fill-opacity: 0.78; stroke-opacity: 1; }
-  50%       { fill-opacity: 0.52; stroke-opacity: 0.7; }
-}
-.leaflet-severe-district {
-  animation: district-severe-pulse 2s ease-in-out infinite;
-}
-
-@keyframes rainfall-station-pulse {
-  0%, 100% { transform: scale(1);    opacity: 0.95; }
-  50%       { transform: scale(1.18); opacity: 0.55; }
-}
-
-@keyframes district-marker-pulse {
-  0%, 100% { transform: scale(1);    opacity: 0.85; }
-  50%       { transform: scale(1.35); opacity: 0.25; }
-}
-
-/* ── Command Center Design Tokens (Tailwind v4 @theme) ─────────── */
-@theme {
-  --color-navy-base:    #080E1A;
-  --color-navy-surface: #0D1526;
-  --color-navy-card:    #111E35;
-  --color-navy-overlay: #162040;
-  --color-navy-input:   #1A2845;
-  --color-navy-hover:   #1F2F55;
-  --color-cc-cyan:      #22D3EE;
-  --color-cc-blue:      #3B82F6;
-
-  --animate-severe-pulse: severe-pulse 2s ease-in-out infinite;
-  --animate-high-glow:    high-glow 2.5s ease-in-out infinite;
-  --animate-live-blink:   live-blink 1.5s ease-in-out infinite;
-  --animate-river-flow:   river-flow 2s linear infinite;
-  --animate-radar-sweep:  radar-sweep 4s linear infinite;
-  --animate-flood-expand: flood-expand 3s ease-out infinite;
-}
-
-/* Force full-height layout for map dashboard */
-html,
-body,
-#__next {
+html, body, #__next {
   height: 100%;
   margin: 0;
   padding: 0;
 }
 
-/* ── Leaflet tooltip overrides ─────────────────────────────── */
-.pakflood-tooltip-container {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
-
-.pakflood-tooltip-container::before {
-  display: none !important;
-}
-
-.pakflood-tooltip {
-  background: rgba(15, 23, 42, 0.97);
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 10px 12px;
-  min-width: 160px;
-  font-family: system-ui, sans-serif;
-  color: #f1f5f9;
-  font-size: 12px;
-  line-height: 1.5;
-  pointer-events: none;
-}
-
-.pakflood-tooltip-title {
-  font-weight: 700;
-  font-size: 13px;
-  color: #ffffff;
-  margin-bottom: 2px;
-}
-
-.pakflood-tooltip-province {
-  color: #64748b;
-  font-size: 11px;
-  margin-bottom: 8px;
-}
-
-.pakflood-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 2px;
-  color: #94a3b8;
-}
-
-.pakflood-tooltip-row span:last-child {
-  color: #e2e8f0;
-  font-weight: 600;
-}
-
-.pakflood-tooltip-hint {
-  margin-top: 8px;
-  font-size: 10px;
-  color: #475569;
-  text-align: center;
-}
-
-/* Risk level colours in tooltip */
-.pakflood-risk-low { color: #22c55e !important; }
-.pakflood-risk-moderate { color: #eab308 !important; }
-.pakflood-risk-high { color: #f97316 !important; }
-.pakflood-risk-severe { color: #ef4444 !important; }
-
-/* Leaflet zoom control — Satellite Ops teal theme */
+/* Leaflet zoom controls */
 .leaflet-control-zoom a {
-  background-color: #091829 !important;
-  color: #00C8AA !important;
-  border-color: rgba(0,255,209,0.20) !important;
+  background-color: #0d1526 !important;
+  color: #22d3ee !important;
+  border-color: rgba(34, 211, 238, 0.2) !important;
 }
-
 .leaflet-control-zoom a:hover {
-  background-color: rgba(0,255,209,0.08) !important;
-  color: #00FFD1 !important;
+  background-color: rgba(34, 211, 238, 0.08) !important;
+  color: #67e8f9 !important;
 }
 
-/* ── Command Center Keyframe Animations ─────────────────────────── */
-@keyframes severe-pulse {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(239,68,68,0.6)); }
-  50%       { filter: drop-shadow(0 0 22px rgba(239,68,68,0.95)); }
-}
-@keyframes high-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(249,115,22,0.5)); }
-  50%       { filter: drop-shadow(0 0 14px rgba(249,115,22,0.85)); }
-}
-@keyframes live-blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-@keyframes river-flow {
-  from { stroke-dashoffset: 36; }
-  to   { stroke-dashoffset: 0; }
-}
-@keyframes radar-sweep {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-@keyframes flood-expand {
-  from { r: 0; opacity: 0.8; }
-  to   { r: 80; opacity: 0; }
-}
-@keyframes copilot-slide-in {
-  from { opacity: 0; transform: translateX(24px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-
-/* ── Command Center Utility Classes ─────────────────────────────── */
-.cc-glass {
-  background: rgba(13,21,38,0.80);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.08);
-}
-.cc-glass-strong {
-  background: rgba(17,30,53,0.92);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.10);
-}
-.cc-surface {
-  background: #0D1526;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-.cc-card {
-  background: #111E35;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-}
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(34,211,238,0.25), 0 0 40px rgba(34,211,238,0.10);
-}
-.glow-red {
-  box-shadow: 0 0 24px rgba(239,68,68,0.35), 0 0 48px rgba(239,68,68,0.15);
-}
-.glow-amber {
-  box-shadow: 0 0 20px rgba(245,158,11,0.30), 0 0 40px rgba(245,158,11,0.10);
-}
-.animate-copilot-slide { animation: copilot-slide-in 0.3s ease-out both; }
-.animate-fade-up       { animation: fade-up 0.25s ease-out both; }
-.animate-severe-pulse  { animation: severe-pulse 2s ease-in-out infinite; }
-.animate-live-blink    { animation: live-blink 1.5s ease-in-out infinite; }
-
-/* ── Leaflet attribution — subtle */
+/* Leaflet attribution */
 .leaflet-control-attribution {
   background: rgba(15, 23, 42, 0.7) !important;
   color: #475569 !important;
   font-size: 9px !important;
 }
-
 .leaflet-control-attribution a {
   color: #64748b !important;
 }
+
+/* Marker popup */
+.leaflet-popup-content-wrapper {
+  background: #0d1526 !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 10px !important;
+  color: #e2e8f0 !important;
+}
+.leaflet-popup-tip {
+  background: #0d1526 !important;
+}
+
+@keyframes live-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.animate-live-blink { animation: live-blink 1.5s ease-in-out infinite; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.25s ease-out both; }

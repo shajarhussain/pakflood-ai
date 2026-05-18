@@ -43,7 +43,13 @@ class FloodModel:
         try:
             import joblib
             self._model = joblib.load(path)
+            import logging
+            logging.getLogger(__name__).info("Flood model loaded: %s", path)
         except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "FLOOD MODEL LOAD FAILED — predictions will return 0.5: %s", exc, exc_info=True
+            )
             warnings.warn(f"Failed to load flood model: {exc}", stacklevel=2)
 
     def predict(self, features: dict[str, float]) -> dict:
