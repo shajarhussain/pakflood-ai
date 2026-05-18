@@ -1,8 +1,8 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData } from "@/lib/types";
-import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, sendChatMessage, type ModelStatus } from "@/lib/api";
+import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData, RiverStation } from "@/lib/types";
+import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, sendChatMessage, fetchRiverStations, type ModelStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import WeatherCard from "@/components/WeatherCard";
 import AuthModal from "@/components/AuthModal";
@@ -51,6 +51,10 @@ export default function FloodApp() {
 
   const [showChat,      setShowChat     ] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const [showRivers,    setShowRivers   ] = useState(false);
+  const [riverStations, setRiverStations] = useState<RiverStation[]>([]);
+  const [riversLoading, setRiversLoading] = useState(false);
 
   const { user, logout } = useAuth();
 
@@ -126,6 +130,16 @@ export default function FloodApp() {
     setShowEvents((prev) => !prev);
   }, [showEvents, events]);
 
+  const handleToggleRivers = useCallback(async () => {
+    if (!showRivers && riverStations.length === 0) {
+      setRiversLoading(true);
+      const data = await fetchRiverStations();
+      setRiverStations(data);
+      setRiversLoading(false);
+    }
+    setShowRivers((prev) => !prev);
+  }, [showRivers, riverStations]);
+
   const handleLocationSelect = useCallback(async (lat: number, lng: number) => {
     setSelectedLocation({ lat, lng });
     setWeather(null);
@@ -195,6 +209,8 @@ export default function FloodApp() {
         showZonePolygons={showZonePolygons}
         riskFilter={riskFilter}
         selectedEvent={selectedEvent}
+        showRivers={showRivers}
+        riverStations={riverStations}
       />
 
       {/* Search bar — hidden when events panel is open to avoid overlap */}
@@ -220,6 +236,30 @@ export default function FloodApp() {
 
         {/* Controls */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Rivers toggle */}
+          <button
+            onClick={handleToggleRivers}
+            disabled={riversLoading}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              showRivers
+                ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                : "bg-slate-800/60 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-slate-700/60"
+            }`}
+            title="Major Pakistan rivers with live discharge animation"
+          >
+            {riversLoading ? (
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M3 6c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 12c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 18c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/>
+              </svg>
+            )}
+            {riversLoading ? "Loading…" : showRivers ? "Hide Rivers" : "Rivers"}
+          </button>
+
           {/* History toggle */}
           <button
             onClick={handleToggleEvents}

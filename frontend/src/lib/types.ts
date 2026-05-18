@@ -92,6 +92,22 @@ export interface WeatherData {
   visibility: number;
 }
 
+// ── River stations ────────────────────────────────────────────────────────────
+
+export interface RiverStation {
+  station_id:       string;
+  name:             string;
+  river_id:         string;
+  river_name:       string;
+  lat:              number;
+  lng:              number;
+  ffd_gauge_id:     string;
+  discharge_cusecs: number;
+  discharge_trend:  "rising" | "stable" | "falling";
+  alert_level:      "normal" | "high" | "flood";
+  updated_at:       string;
+}
+
 // ── District search ───────────────────────────────────────────────────────────
 
 export interface DistrictSummary {

@@ -1,4 +1,4 @@
-import type { PredictionResponse, ZonesGeoJSON, DistrictSearchResult, FloodEvent, WeatherData } from "@/lib/types";
+import type { PredictionResponse, ZonesGeoJSON, DistrictSearchResult, FloodEvent, WeatherData, RiverStation } from "@/lib/types";
 export type { FloodEvent };
 
 const API_BASE =
@@ -132,6 +132,16 @@ export async function searchDistricts(q: string): Promise<DistrictSearchResult[]
     );
     if (!res.ok) return [];
     return res.json() as Promise<DistrictSearchResult[]>;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchRiverStations(): Promise<RiverStation[]> {
+  try {
+    const res = await fetch(`${API_BASE}/rivers`, { cache: "no-store" });
+    if (!res.ok) return [];
+    return res.json() as Promise<RiverStation[]>;
   } catch {
     return [];
   }
