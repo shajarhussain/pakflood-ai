@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { AuthProvider } from "@/lib/auth-context";
 
 const FloodApp = dynamic(() => import("@/components/FloodApp"), {
   ssr: false,
@@ -11,5 +12,9 @@ const FloodApp = dynamic(() => import("@/components/FloodApp"), {
 });
 
 export default function Home() {
-  return <FloodApp />;
+  return (
+    <AuthProvider>
+      <FloodApp />
+    </AuthProvider>
+  );
 }

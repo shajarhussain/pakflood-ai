@@ -81,7 +81,7 @@ export default function ChatPanel({ onClose }: Props) {
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-cyan-400 animate-live-blink" />
           <span className="text-slate-200 text-sm font-semibold">PakFlood AI</span>
-          <span className="text-slate-600 text-[10px]">powered by Gemini</span>
+          {/* <span className="text-slate-600 text-[10px]">powered by Gemini</span> */}
         </div>
         <button
           onClick={onClose}

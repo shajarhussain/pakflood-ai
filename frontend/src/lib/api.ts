@@ -92,6 +92,37 @@ export async function sendChatMessage(
   return data.reply;
 }
 
+export interface LoginResponse  { access_token: string; user_id: string; email: string }
+export interface SignupResponse { message: string; access_token?: string; user_id?: string; email?: string }
+
+export async function loginUser(email: string, password: string): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((data as { detail?: string }).detail ?? "Login failed");
+  }
+  return res.json() as Promise<LoginResponse>;
+}
+
+export async function signupUser(email: string, password: string): Promise<SignupResponse> {
+  const res = await fetch(`${API_BASE}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((data as { detail?: string }).detail ?? "Signup failed");
+  }
+  return res.json() as Promise<SignupResponse>;
+}
+
 export async function searchDistricts(q: string): Promise<DistrictSearchResult[]> {
   if (q.trim().length < 2) return [];
   try {

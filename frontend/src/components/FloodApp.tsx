@@ -3,7 +3,9 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData } from "@/lib/types";
 import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import WeatherCard from "@/components/WeatherCard";
+import AuthModal from "@/components/AuthModal";
 import SearchBar from "@/components/SearchBar";
 import FloodEventsPanel from "@/components/FloodEventsPanel";
 import ChatPanel from "@/components/ChatPanel";
@@ -42,7 +44,15 @@ export default function FloodApp() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FloodEvent | null>(null);
 
-  const [showChat, setShowChat] = useState(false);
+  const [showChat,      setShowChat     ] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const { user, logout } = useAuth();
+
+  const handleAskAI = useCallback(() => {
+    if (!user) { setShowAuthModal(true); return; }
+    setShowChat((v) => !v);
+  }, [user]);
 
   useEffect(() => { fetchModelStatus().then(setModelStatus); }, []);
 
@@ -248,22 +258,6 @@ export default function FloodApp() {
             {showZonePolygons ? "Hide Zones" : "Zones"}
           </button>
 
-          {/* AI Chat */}
-          <button
-            onClick={() => setShowChat((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-              showChat
-                ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
-                : "bg-slate-800/60 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-slate-700/60"
-            }`}
-            title="Ask PakFlood AI assistant"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            Ask AI
-          </button>
-
           {/* My Location */}
           <button
             onClick={handleGeolocate}
@@ -275,6 +269,25 @@ export default function FloodApp() {
             </svg>
             My Location
           </button>
+
+          {/* User badge */}
+          {user && (
+            <>
+              <div className="w-px h-4 bg-white/10 shrink-0" />
+              <div
+                className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs font-bold shrink-0"
+                title={user.email}
+              >
+                {user.email[0].toUpperCase()}
+              </div>
+              <button
+                onClick={logout}
+                className="text-slate-500 hover:text-slate-300 text-xs transition-colors shrink-0"
+              >
+                Sign Out
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -395,9 +408,9 @@ export default function FloodApp() {
         </div>
       )}
 
-      {/* Weather + prediction card */}
+      {/* Weather + prediction card — sits above the Ask AI FAB */}
       {selectedLocation && !weatherLoading && !showEvents && (
-        <div className="absolute bottom-8 right-4 z-[1000]">
+        <div className="absolute bottom-20 right-4 z-[1000]">
           <WeatherCard
             location={selectedLocation}
             weather={weather}
@@ -410,8 +423,46 @@ export default function FloodApp() {
         </div>
       )}
 
+      {/* Ask AI floating button */}
+      {!showChat && (
+        <button
+          onClick={handleAskAI}
+          className="absolute bottom-6 right-6 z-[1010] flex items-center gap-2 px-4 py-3 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/25 shadow-lg backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+          title={user ? "Ask PakFlood AI" : "Sign in to use AI assistant"}
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Ask AI
+          {!user && (
+            <span className="text-[10px] text-slate-500 font-normal">· Sign in</span>
+          )}
+        </button>
+      )}
+
+      {/* Chat open — small collapse button */}
+      {showChat && (
+        <button
+          onClick={() => setShowChat(false)}
+          className="absolute bottom-6 right-6 z-[1010] w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center justify-center hover:bg-cyan-500/25 shadow-lg backdrop-blur-sm transition-all"
+          title="Close AI chat"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      )}
+
       {/* AI Chat panel */}
       {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
+
+      {/* Auth modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => { setShowAuthModal(false); setShowChat(true); }}
+        />
+      )}
 
       {/* Historical flood events panel */}
       {showEvents && (
