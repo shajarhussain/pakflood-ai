@@ -1,11 +1,14 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import type { PredictionResponse, ZonesGeoJSON, FloodEvent } from "@/lib/types";
-import { predictFloodRisk, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
-import PredictionCard from "@/components/PredictionCard";
+import type { PredictionResponse, ZonesGeoJSON, FloodEvent, WeatherData } from "@/lib/types";
+import { predictFloodRisk, fetchWeather, fetchModelStatus, fetchZonesGeoJSON, fetchFloodEvents, type ModelStatus } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import WeatherCard from "@/components/WeatherCard";
+import AuthModal from "@/components/AuthModal";
 import SearchBar from "@/components/SearchBar";
 import FloodEventsPanel from "@/components/FloodEventsPanel";
+import ChatPanel from "@/components/ChatPanel";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), { ssr: false });
 
@@ -22,8 +25,11 @@ function formatAge(isoString: string | null): string {
 
 export default function FloodApp() {
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [weather,          setWeather         ] = useState<WeatherData | null>(null);
+  const [weatherLoading,   setWeatherLoading  ] = useState(false);
+  const [weatherError,     setWeatherError    ] = useState<string | null>(null);
   const [prediction,       setPrediction      ] = useState<PredictionResponse | null>(null);
-  const [loading,          setLoading         ] = useState(false);
+  const [predicting,       setPredicting      ] = useState(false);
   const [error,            setError           ] = useState<string | null>(null);
   const [modelStatus,      setModelStatus     ] = useState<ModelStatus | null>(null);
 
@@ -37,6 +43,16 @@ export default function FloodApp() {
   const [showEvents,    setShowEvents   ] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FloodEvent | null>(null);
+
+  const [showChat,      setShowChat     ] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const { user, logout } = useAuth();
+
+  const handleAskAI = useCallback(() => {
+    if (!user) { setShowAuthModal(true); return; }
+    setShowChat((v) => !v);
+  }, [user]);
 
   useEffect(() => { fetchModelStatus().then(setModelStatus); }, []);
 
@@ -72,33 +88,49 @@ export default function FloodApp() {
     setShowEvents((prev) => !prev);
   }, [showEvents, events]);
 
-  const runPrediction = useCallback(async (lat: number, lng: number) => {
+  const handleLocationSelect = useCallback(async (lat: number, lng: number) => {
     setSelectedLocation({ lat, lng });
+    setWeather(null);
     setPrediction(null);
+    setWeatherError(null);
     setError(null);
-    setLoading(true);
+    setWeatherLoading(true);
     try {
-      const result = await predictFloodRisk(lat, lng);
-      setPrediction(result);
+      const w = await fetchWeather(lat, lng);
+      setWeather(w);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get prediction");
+      setWeatherError(err instanceof Error ? err.message : "Weather unavailable");
     } finally {
-      setLoading(false);
+      setWeatherLoading(false);
     }
   }, []);
 
+  const handlePredict = useCallback(async () => {
+    if (!selectedLocation) return;
+    setPredicting(true);
+    setError(null);
+    try {
+      const result = await predictFloodRisk(selectedLocation.lat, selectedLocation.lng);
+      setPrediction(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Prediction failed");
+    } finally {
+      setPredicting(false);
+    }
+  }, [selectedLocation]);
+
   const handleGeolocate = useCallback(() => {
     if (!navigator.geolocation) { setError("Geolocation not supported"); return; }
-    setLoading(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => runPrediction(pos.coords.latitude, pos.coords.longitude),
-      () => { setLoading(false); setError("Location access denied — click on the map instead"); }
+      (pos) => handleLocationSelect(pos.coords.latitude, pos.coords.longitude),
+      () => setError("Location access denied — click on the map instead")
     );
-  }, [runPrediction]);
+  }, [handleLocationSelect]);
 
   const handleDismiss = useCallback(() => {
-    setPrediction(null); setError(null); setSelectedLocation(null);
+    setSelectedLocation(null); setWeather(null); setPrediction(null);
+    setWeatherError(null); setError(null);
   }, []);
 
   const modelUnavailable = modelStatus !== null && !modelStatus.artifact_ready;
@@ -119,7 +151,7 @@ export default function FloodApp() {
       {/* Full-screen map */}
       <FloodMap
         selectedLocation={selectedLocation}
-        onLocationSelect={runPrediction}
+        onLocationSelect={handleLocationSelect}
         zones={zones}
         showZones={showZones}
         showZonePolygons={showZonePolygons}
@@ -128,7 +160,7 @@ export default function FloodApp() {
       />
 
       {/* Search bar — hidden when events panel is open to avoid overlap */}
-      {!showEvents && <SearchBar onSelect={(lat, lng) => runPrediction(lat, lng)} />}
+      {!showEvents && <SearchBar onSelect={(lat, lng) => handleLocationSelect(lat, lng)} />}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-slate-950/80 backdrop-blur-sm border-b border-white/10">
@@ -229,7 +261,7 @@ export default function FloodApp() {
           {/* My Location */}
           <button
             onClick={handleGeolocate}
-            disabled={loading}
+            disabled={weatherLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -237,6 +269,25 @@ export default function FloodApp() {
             </svg>
             My Location
           </button>
+
+          {/* User badge */}
+          {user && (
+            <>
+              <div className="w-px h-4 bg-white/10 shrink-0" />
+              <div
+                className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 text-xs font-bold shrink-0"
+                title={user.email}
+              >
+                {user.email[0].toUpperCase()}
+              </div>
+              <button
+                onClick={logout}
+                className="text-slate-500 hover:text-slate-300 text-xs transition-colors shrink-0"
+              >
+                Sign Out
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -326,7 +377,7 @@ export default function FloodApp() {
       })()}
 
       {/* Hint */}
-      {!selectedLocation && !loading && !showEvents && (
+      {!selectedLocation && !weatherLoading && !showEvents && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
           <div className="px-4 py-2 rounded-full bg-slate-900/90 border border-white/10 text-slate-400 text-xs backdrop-blur-sm">
             Click anywhere in Pakistan · or use My Location
@@ -334,21 +385,21 @@ export default function FloodApp() {
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
+      {/* Weather loading */}
+      {weatherLoading && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/90 border border-white/10 backdrop-blur-sm">
             <svg className="w-4 h-4 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
-            <span className="text-slate-400 text-xs">Analysing flood risk…</span>
+            <span className="text-slate-400 text-xs">Fetching weather…</span>
           </div>
         </div>
       )}
 
       {/* Error */}
-      {error && !loading && (
+      {error && !predicting && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000] max-w-sm w-full px-4">
           <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-900/40 border border-red-500/30 backdrop-blur-sm">
             <p className="text-red-300 text-xs">{error}</p>
@@ -357,11 +408,60 @@ export default function FloodApp() {
         </div>
       )}
 
-      {/* Prediction card */}
-      {prediction && selectedLocation && !loading && !showEvents && (
-        <div className="absolute bottom-8 right-4 z-[1000]">
-          <PredictionCard prediction={prediction} location={selectedLocation} onDismiss={handleDismiss} />
+      {/* Weather + prediction card — sits above the Ask AI FAB */}
+      {selectedLocation && !weatherLoading && !showEvents && (
+        <div className="absolute bottom-20 right-4 z-[1000]">
+          <WeatherCard
+            location={selectedLocation}
+            weather={weather}
+            weatherError={weatherError}
+            prediction={prediction}
+            predicting={predicting}
+            onPredict={handlePredict}
+            onDismiss={handleDismiss}
+          />
         </div>
+      )}
+
+      {/* Ask AI floating button */}
+      {!showChat && (
+        <button
+          onClick={handleAskAI}
+          className="absolute bottom-6 right-6 z-[1010] flex items-center gap-2 px-4 py-3 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/25 shadow-lg backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+          title={user ? "Ask PakFlood AI" : "Sign in to use AI assistant"}
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Ask AI
+          {!user && (
+            <span className="text-[10px] text-slate-500 font-normal">· Sign in</span>
+          )}
+        </button>
+      )}
+
+      {/* Chat open — small collapse button */}
+      {showChat && (
+        <button
+          onClick={() => setShowChat(false)}
+          className="absolute bottom-6 right-6 z-[1010] w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center justify-center hover:bg-cyan-500/25 shadow-lg backdrop-blur-sm transition-all"
+          title="Close AI chat"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      )}
+
+      {/* AI Chat panel */}
+      {showChat && <ChatPanel onClose={() => setShowChat(false)} />}
+
+      {/* Auth modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => { setShowAuthModal(false); setShowChat(true); }}
+        />
       )}
 
       {/* Historical flood events panel */}

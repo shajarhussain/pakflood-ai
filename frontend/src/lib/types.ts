@@ -71,6 +71,27 @@ export interface FloodEvent {
   description: string;
 }
 
+// ── Weather ───────────────────────────────────────────────────────────────────
+
+export interface WeatherData {
+  location: string;
+  country: string;
+  temp: number;
+  feels_like: number;
+  temp_min: number;
+  temp_max: number;
+  humidity: number;
+  pressure: number;
+  wind_speed: number;
+  wind_deg: number;
+  wind_dir: string;
+  weather: string;
+  description: string;
+  icon: string;
+  clouds: number;
+  visibility: number;
+}
+
 // ── District search ───────────────────────────────────────────────────────────
 
 export interface DistrictSummary {
